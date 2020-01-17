@@ -305,7 +305,12 @@ type MathOperation
 
 mathOperationGenerator : Generator MathOperation
 mathOperationGenerator =
-    Random.uniform Add [ Subtract, Multiply, Divide ]
+    Random.uniform
+        Add
+        [ Subtract
+        , Multiply
+        , Divide
+        ]
 
 
 type alias CalculationQuestion =
