@@ -73,7 +73,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GetNewQuestion ->
-            ( model, Random.generate NewQuestion (calculationGenerator model.difficulty) )
+            ( model, Random.generate NewQuestion <| calculationGenerator model.difficulty )
 
         NewQuestion question ->
             ( { model | question = Just question }, Cmd.none )
@@ -89,7 +89,6 @@ update msg model =
 
         SubmitCalculationAnswer question ->
             let
-                maybeFraction : Maybe Fraction
                 maybeFraction =
                     Maybe.map2
                         (\numerator denominator -> ( numerator, denominator ))
@@ -145,7 +144,9 @@ mainView model =
         , Element.centerY
         ]
         [ row
-            [ spacing 10, padding 10 ]
+            [ spacing 10
+            , padding 10
+            ]
             [ Element.paragraph
                 []
                 [ el [ Font.bold ] <| text "Correct: "
@@ -164,7 +165,8 @@ mainView model =
             ]
         , row
             [ spacing 20
-            , padding 10 ]
+            , padding 10
+            ]
             [ setDifficultyButton model.difficulty Easy
             , setDifficultyButton model.difficulty Intermediate
             , setDifficultyButton model.difficulty Hard
@@ -190,14 +192,18 @@ mainView model =
 
 setDifficultyButton : Difficulty -> Difficulty -> Element Msg
 setDifficultyButton modelDifficulty difficulty =
-    Input.button
-        [ Background.color <|
+    let
+        difficultyButtonColor =
             if modelDifficulty == difficulty then
-                Element.rgb255 60 60 60
+                elmBlue
 
             else
-                Element.rgb255 128 128 128
+                elmGray
+    in
+    Input.button
+        [ Background.color difficultyButtonColor
         , padding 10
+        , Border.rounded 4
         ]
         { onPress = Just <| SetDifficulty difficulty
         , label = text <| difficultyToString difficulty
@@ -207,7 +213,9 @@ setDifficultyButton modelDifficulty difficulty =
 fractionView : Fraction -> Element msg
 fractionView fraction =
     column
-        [ Element.alignRight, spacing 10 ]
+        [ Element.alignRight
+        , spacing 10
+        ]
         [ fraction
             |> Fraction.getNumerator
             |> String.fromInt
@@ -215,7 +223,7 @@ fractionView fraction =
         , el
             [ width fill
             , height <| px 2
-            , Background.color white
+            , Background.color black
             ]
             Element.none
         , fraction
@@ -230,7 +238,9 @@ questionView calculation numeratorAnswer denominatorAnswer =
     column
         [ width fill ]
         [ row
-            [ Element.centerX, spacing 10 ]
+            [ Element.centerX
+            , spacing 10
+            ]
             [ column
                 []
                 [ fractionView calculation.fraction1 ]
@@ -267,7 +277,7 @@ questionView calculation numeratorAnswer denominatorAnswer =
                     }
                 , Input.button
                     [ width fill
-                    , Background.color purple
+                    , Background.color elmGreen
                     , Border.rounded 4
                     , spacing 20
                     , padding 20
@@ -278,7 +288,7 @@ questionView calculation numeratorAnswer denominatorAnswer =
                             [ Element.centerX
                             , Font.color white
                             ]
-                            <| text "Submit"
+                            (text "Submit")
                     }
                 ]
             ]
@@ -307,15 +317,28 @@ type alias CalculationQuestion =
 
 difficultyFractionBounds : Difficulty -> ( Int, Int )
 difficultyFractionBounds difficulty =
+    let
+        easyBound =
+            5
+
+        intermediateBound =
+            10
+
+        hardBound =
+            20
+
+        getBounds bound =
+            ( negate bound, bound )
+    in
     case difficulty of
         Easy ->
-            ( -5, 5 )
+            getBounds easyBound
 
         Intermediate ->
-            ( -10, 10 )
+            getBounds intermediateBound
 
         Hard ->
-            ( -20, 20 )
+            getBounds hardBound
 
 
 fractionIntGenerator : Difficulty -> Generator Int
@@ -411,12 +434,15 @@ operationToString operation =
 
 fractionUnsafeReciprocal : Fraction -> Fraction
 fractionUnsafeReciprocal fraction =
-    Fraction.createUnsafe (Fraction.getDenominator fraction) (Fraction.getNumerator fraction)
+    Fraction.createUnsafe
+        (Fraction.getDenominator fraction)
+        (Fraction.getNumerator fraction)
 
 
 fractionUnsafeDivision : Fraction -> Fraction -> Fraction
 fractionUnsafeDivision fraction1 fraction2 =
     Fraction.multiply fraction1 <| fractionUnsafeReciprocal fraction2
+
 
 
 -- COLOR HELPERS
@@ -426,6 +452,27 @@ white : Element.Color
 white =
     Element.rgb 1 1 1
 
-purple : Element.Color
-purple =
-    Element.rgb255 90 60 120
+
+black : Element.Color
+black =
+    Element.rgb 0 0 0
+
+
+elmBlue : Element.Color
+elmBlue =
+    Element.rgb255 96 181 204
+
+
+elmGreen : Element.Color
+elmGreen =
+    Element.rgb255 127 209 59
+
+
+elmOrange : Element.Color
+elmOrange =
+    Element.rgb255 240 173 0
+
+
+elmGray : Element.Color
+elmGray =
+    Element.rgb255 90 99 120
