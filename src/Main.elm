@@ -227,20 +227,30 @@ fractionView fraction =
         [ Element.alignRight
         , spacing 10
         ]
-        [ fraction
-            |> Fraction.getNumerator
-            |> String.fromInt
-            |> text
+        [ el
+            [ width fill
+            , Font.center
+            ]
+            (fraction
+                |> Fraction.getNumerator
+                |> String.fromInt
+                |> text
+            )
         , el
             [ width fill
             , height <| px 2
             , Background.color black
             ]
             Element.none
-        , fraction
-            |> Fraction.getDenominator
-            |> String.fromInt
-            |> text
+        , el
+            [ width fill
+            , Font.center
+            ]
+            (fraction
+                |> Fraction.getDenominator
+                |> String.fromInt
+                |> text
+            )
         ]
 
 
