@@ -79,7 +79,19 @@ update msg model =
             ( { model | question = Just question }, Cmd.none )
 
         SetDifficulty difficulty ->
-            ( { model | difficulty = difficulty }, Cmd.none )
+            let
+                newModel : Model
+                newModel =
+                    { question = model.question
+                    , difficulty = difficulty
+                    , streak = 0
+                    , correct = 0
+                    , incorrect = 0
+                    , numeratorAnswer = ""
+                    , denominatorAnswer = ""
+                    }
+            in
+            update GetNewQuestion newModel
 
         UpdateNumeratorAnswer numeratorAnswer ->
             ( { model | numeratorAnswer = numeratorAnswer }, Cmd.none )
