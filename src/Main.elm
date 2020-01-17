@@ -66,7 +66,7 @@ type Msg
     | SetDifficulty Difficulty
     | UpdateNumeratorAnswer String
     | UpdateDenominatorAnswer String
-    | SubmitCalculationAnswer
+    | SubmitCalculationAnswer CalculationQuestion
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -87,7 +87,7 @@ update msg model =
         UpdateDenominatorAnswer denominatorAnswer ->
             ( { model | denominatorAnswer = denominatorAnswer }, Cmd.none )
 
-        SubmitCalculationAnswer ->
+        SubmitCalculationAnswer question ->
             let
                 maybeFraction : Maybe Fraction
                 maybeFraction =
@@ -99,7 +99,7 @@ update msg model =
             in
             case maybeFraction of
                 Just fraction ->
-                    if Fraction.equal model.question.answer fraction then
+                    if Fraction.equal question.answer fraction then
                         let
                             newModel =
                                 { question = model.question
@@ -111,7 +111,7 @@ update msg model =
                                 , denominatorAnswer = ""
                                 }
                         in
-                        ( newModel, GetNewQuestion )
+                        update GetNewQuestion newModel
 
                     else
                         let
@@ -125,7 +125,7 @@ update msg model =
                                 , denominatorAnswer = ""
                                 }
                         in
-                        ( newModel, GetNewQuestion )
+                        update GetNewQuestion newModel
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -163,7 +163,8 @@ mainView model =
                 ]
             ]
         , row
-            [ spacing 20, padding 10 ]
+            [ spacing 20
+            , padding 10 ]
             [ setDifficultyButton model.difficulty Easy
             , setDifficultyButton model.difficulty Intermediate
             , setDifficultyButton model.difficulty Hard
@@ -214,7 +215,7 @@ fractionView fraction =
         , el
             [ width fill
             , height <| px 2
-            , Background.color <| Element.rgb255 0 0 0
+            , Background.color white
             ]
             Element.none
         , fraction
@@ -266,11 +267,18 @@ questionView calculation numeratorAnswer denominatorAnswer =
                     }
                 , Input.button
                     [ width fill
-                    , Background.color <| Element.rgb255 90 60 120
+                    , Background.color purple
                     , Border.rounded 4
+                    , spacing 20
+                    , padding 20
                     ]
-                    { onPress = Just SubmitCalculationAnswer
-                    , label = text "Submit"
+                    { onPress = Just <| SubmitCalculationAnswer calculation
+                    , label =
+                        el
+                            [ Element.centerX
+                            , Font.color white
+                            ]
+                            <| text "Submit"
                     }
                 ]
             ]
@@ -323,7 +331,7 @@ fractionIntGenerator difficulty =
 fractionGenerator : Difficulty -> Generator Fraction
 fractionGenerator difficulty =
     Random.map2
-        (\numerator denominator -> Fraction.createUnsafe numerator denominator)
+        (\numerator denominator -> Fraction.createUnsafe numerator denominator |> Fraction.simplify)
         (fractionIntGenerator difficulty)
         (fractionIntGenerator difficulty)
 
@@ -409,3 +417,15 @@ fractionUnsafeReciprocal fraction =
 fractionUnsafeDivision : Fraction -> Fraction -> Fraction
 fractionUnsafeDivision fraction1 fraction2 =
     Fraction.multiply fraction1 <| fractionUnsafeReciprocal fraction2
+
+
+-- COLOR HELPERS
+
+
+white : Element.Color
+white =
+    Element.rgb 1 1 1
+
+purple : Element.Color
+purple =
+    Element.rgb255 90 60 120
