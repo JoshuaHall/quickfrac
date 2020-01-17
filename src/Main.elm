@@ -156,35 +156,63 @@ mainView model =
         , Element.centerY
         ]
         [ row
-            [ spacing 10
+            [ Element.centerX
+            , spacing 20
             , padding 10
             ]
-            [ Element.paragraph
-                []
-                [ el [ Font.bold ] <| text "Correct: "
-                , text <| String.fromInt model.correct
+            [ column
+                [ Element.centerX
+                , Font.center
                 ]
-            , Element.paragraph
-                []
-                [ el [ Font.bold ] <| text "Incorrect: "
-                , text <| String.fromInt model.incorrect
+                [ el
+                    [ Font.bold
+                    , Font.center
+                    ]
+                    (text "Correct")
+                , el
+                    [ Element.centerX ]
+                    (String.fromInt model.correct |> text)
                 ]
-            , Element.paragraph
-                []
-                [ el [ Font.bold ] <| text "Streak: "
-                , text <| String.fromInt model.streak
+            , column
+                [ Element.centerX
+                ]
+                [ el
+                    [ Font.bold
+                    , Font.center
+                    ]
+                    (text "Incorrect")
+                , el
+                    [ Element.centerX ]
+                    (String.fromInt model.incorrect |> text)
+                ]
+            , column
+                [ Element.centerX
+                , Font.center
+                ]
+                [ el
+                    [ Font.bold
+                    , Font.center
+                    ]
+                    (text "Streak")
+                , el
+                    [ Element.centerX ]
+                    (String.fromInt model.streak |> text)
                 ]
             ]
         , row
-            [ spacing 20
+            [ Element.centerX
+            , spacing 20
             , padding 10
             ]
-            [ setDifficultyButton model.difficulty Easy
-            , setDifficultyButton model.difficulty Intermediate
-            , setDifficultyButton model.difficulty Hard
+            [ setDifficultyButton model.difficulty model.question Easy
+            , setDifficultyButton model.difficulty model.question Intermediate
+            , setDifficultyButton model.difficulty model.question Hard
             ]
         , row
-            [ Element.centerX ]
+            [ Element.centerX
+            , spacing 20
+            , padding 10
+            ]
             [ case model.question of
                 Just question ->
                     questionView question model.numeratorAnswer model.denominatorAnswer
@@ -192,21 +220,16 @@ mainView model =
                 Nothing ->
                     row
                         []
-                        [ Input.button
-                            []
-                            { onPress = Just GetNewQuestion
-                            , label = text "Start"
-                            }
-                        ]
+                        [ text "Choose a difficulty from above to get started!" ]
             ]
         ]
 
 
-setDifficultyButton : Difficulty -> Difficulty -> Element Msg
-setDifficultyButton modelDifficulty difficulty =
+setDifficultyButton : Difficulty -> Maybe CalculationQuestion -> Difficulty -> Element Msg
+setDifficultyButton modelDifficulty maybeQuestion difficulty =
     let
         difficultyButtonColor =
-            if modelDifficulty == difficulty then
+            if modelDifficulty == difficulty && isJust maybeQuestion then
                 elmBlue
 
             else
@@ -403,12 +426,26 @@ getCalculationAnswer fraction1 mathOperation fraction2 =
 
 
 
--- HELPERS
+-- GENERAL HELPERS
 
 
 increment : Int -> Int
 increment int =
     int + 1
+
+
+isJust : Maybe a -> Bool
+isJust maybe =
+    case maybe of
+        Just _ ->
+            True
+
+        Nothing ->
+            False
+
+
+
+-- APP HELPERS
 
 
 difficultyToString : Difficulty -> String
