@@ -160,44 +160,9 @@ mainView model =
             , spacing 20
             , padding 10
             ]
-            [ column
-                [ Element.centerX
-                , Font.center
-                ]
-                [ el
-                    [ Font.bold
-                    , Font.center
-                    ]
-                    (text "Correct")
-                , el
-                    [ Element.centerX ]
-                    (String.fromInt model.correct |> text)
-                ]
-            , column
-                [ Element.centerX
-                ]
-                [ el
-                    [ Font.bold
-                    , Font.center
-                    ]
-                    (text "Incorrect")
-                , el
-                    [ Element.centerX ]
-                    (String.fromInt model.incorrect |> text)
-                ]
-            , column
-                [ Element.centerX
-                , Font.center
-                ]
-                [ el
-                    [ Font.bold
-                    , Font.center
-                    ]
-                    (text "Streak")
-                , el
-                    [ Element.centerX ]
-                    (String.fromInt model.streak |> text)
-                ]
+            [ questionCounter "Correct" model.correct
+            , questionCounter "Incorrect" model.incorrect
+            , questionCounter "Streak" model.streak
             ]
         , row
             [ Element.centerX
@@ -208,20 +173,31 @@ mainView model =
             , setDifficultyButton model.difficulty model.question Intermediate
             , setDifficultyButton model.difficulty model.question Hard
             ]
-        , row
-            [ Element.centerX
-            , spacing 20
-            , padding 10
-            ]
-            [ case model.question of
-                Just question ->
-                    questionView question model.numeratorAnswer model.denominatorAnswer
+        , case model.question of
+            Just question ->
+                questionView question model.numeratorAnswer model.denominatorAnswer
 
-                Nothing ->
-                    row
-                        []
-                        [ text "Choose a difficulty from above to get started!" ]
+            Nothing ->
+                text "Choose a difficulty from above to get started!"
+        ]
+
+
+questionCounter : String -> Int -> Element msg
+questionCounter counterText count =
+    column
+        [ Element.centerX
+        , Font.center
+        ]
+        [ el
+            [ Font.bold
+            , Font.center
             ]
+            (text counterText)
+        , el
+            [ Element.centerX ]
+            (String.fromInt count
+                |> text
+            )
         ]
 
 
@@ -276,56 +252,46 @@ questionView calculation numeratorAnswer denominatorAnswer =
             [ Element.centerX
             , spacing 10
             ]
-            [ column
-                []
-                [ fractionView calculation.fraction1 ]
-            , Element.paragraph
-                []
-                [ calculation.operation
-                    |> operationToString
-                    |> text
-                ]
-            , column
-                []
-                [ fractionView calculation.fraction2 ]
+            [ fractionView calculation.fraction1
+            , calculation.operation
+                |> operationToString
+                |> text
+            , fractionView calculation.fraction2
             ]
-        , row
-            [ width fill ]
-            [ column
-                [ spacing 20
+        , column
+            [ spacing 20
+            , padding 20
+            , width fill
+            ]
+            [ Input.text
+                []
+                { onChange = UpdateNumeratorAnswer
+                , text = numeratorAnswer
+                , placeholder = Nothing
+                , label = Input.labelAbove [] (text "Numerator")
+                }
+            , Input.text
+                []
+                { onChange = UpdateDenominatorAnswer
+                , text = denominatorAnswer
+                , placeholder = Nothing
+                , label = Input.labelAbove [] (text "Denominator")
+                }
+            , Input.button
+                [ width fill
+                , Background.color elmGreen
+                , Border.rounded 4
+                , spacing 20
                 , padding 20
-                , width fill
                 ]
-                [ Input.text
-                    []
-                    { onChange = UpdateNumeratorAnswer
-                    , text = numeratorAnswer
-                    , placeholder = Nothing
-                    , label = Input.labelAbove [] (text "Numerator")
-                    }
-                , Input.text
-                    []
-                    { onChange = UpdateDenominatorAnswer
-                    , text = denominatorAnswer
-                    , placeholder = Nothing
-                    , label = Input.labelAbove [] (text "Denominator")
-                    }
-                , Input.button
-                    [ width fill
-                    , Background.color elmGreen
-                    , Border.rounded 4
-                    , spacing 20
-                    , padding 20
-                    ]
-                    { onPress = Just <| SubmitCalculationAnswer calculation
-                    , label =
-                        el
-                            [ Element.centerX
-                            , Font.color white
-                            ]
-                            (text "Submit")
-                    }
-                ]
+                { onPress = Just <| SubmitCalculationAnswer calculation
+                , label =
+                    el
+                        [ Element.centerX
+                        , Font.color white
+                        ]
+                        (text "Submit")
+                }
             ]
         ]
 
