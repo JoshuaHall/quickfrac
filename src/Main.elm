@@ -1,7 +1,7 @@
 module Main exposing (main)
 
 import Browser
-import Element exposing (Element, column, el, fill, height, padding, px, row, spacing, text, width)
+import Element exposing (Color, Element, centerX, centerY, column, el, fill, height, padding, px, row, spacing, text, width)
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
@@ -22,7 +22,7 @@ main =
 
 
 type alias Model =
-    { question : Maybe CalculationQuestion
+    { question : Maybe Question
     , difficulty : Difficulty
     , streak : Int
     , correct : Int
@@ -62,18 +62,18 @@ type Difficulty
 
 type Msg
     = GetNewQuestion
-    | NewQuestion CalculationQuestion
+    | NewQuestion Question
     | SetDifficulty Difficulty
     | UpdateNumeratorAnswer String
     | UpdateDenominatorAnswer String
-    | SubmitCalculationAnswer CalculationQuestion
+    | SubmitCalculationAnswer Question
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GetNewQuestion ->
-            ( model, Random.generate NewQuestion <| calculationGenerator model.difficulty )
+            ( model, Random.generate NewQuestion <| questionGenerator model.difficulty )
 
         NewQuestion question ->
             ( { model | question = Just question }, Cmd.none )
@@ -152,11 +152,11 @@ view model =
 mainView : Model -> Element Msg
 mainView model =
     column
-        [ Element.centerX
-        , Element.centerY
+        [ centerX
+        , centerY
         ]
         [ row
-            [ Element.centerX
+            [ centerX
             , spacing 20
             , padding 10
             ]
@@ -165,7 +165,7 @@ mainView model =
             , questionCounter "Streak" model.streak
             ]
         , row
-            [ Element.centerX
+            [ centerX
             , spacing 20
             , padding 10
             ]
@@ -185,7 +185,7 @@ mainView model =
 questionCounter : String -> Int -> Element msg
 questionCounter counterText count =
     column
-        [ Element.centerX
+        [ centerX
         , Font.center
         ]
         [ el
@@ -194,14 +194,14 @@ questionCounter counterText count =
             ]
             (text counterText)
         , el
-            [ Element.centerX ]
+            [ centerX ]
             (String.fromInt count
                 |> text
             )
         ]
 
 
-setDifficultyButton : Difficulty -> Maybe CalculationQuestion -> Difficulty -> Element Msg
+setDifficultyButton : Difficulty -> Maybe Question -> Difficulty -> Element Msg
 setDifficultyButton modelDifficulty maybeQuestion difficulty =
     let
         difficultyButtonColor =
@@ -254,12 +254,12 @@ fractionView fraction =
         ]
 
 
-questionView : CalculationQuestion -> String -> String -> Element Msg
+questionView : Question -> String -> String -> Element Msg
 questionView calculation numeratorAnswer denominatorAnswer =
     column
         [ width fill ]
         [ row
-            [ Element.centerX
+            [ centerX
             , spacing 10
             ]
             [ fractionView calculation.fraction1
@@ -297,7 +297,7 @@ questionView calculation numeratorAnswer denominatorAnswer =
                 { onPress = Just <| SubmitCalculationAnswer calculation
                 , label =
                     el
-                        [ Element.centerX
+                        [ centerX
                         , Font.color white
                         ]
                         (text "Submit")
@@ -323,7 +323,7 @@ mathOperationGenerator =
         ]
 
 
-type alias CalculationQuestion =
+type alias Question =
     { fraction1 : Fraction
     , operation : MathOperation
     , fraction2 : Fraction
@@ -375,11 +375,11 @@ fractionGenerator difficulty =
         (fractionIntGenerator difficulty)
 
 
-calculationGenerator : Difficulty -> Generator CalculationQuestion
-calculationGenerator difficulty =
+questionGenerator : Difficulty -> Generator Question
+questionGenerator difficulty =
     Random.map3
         (\fraction1 mathOperation fraction2 ->
-            CalculationQuestion
+            Question
                 fraction1
                 mathOperation
                 fraction2
@@ -478,31 +478,31 @@ fractionUnsafeDivision fraction1 fraction2 =
 -- COLOR HELPERS
 
 
-white : Element.Color
+white : Color
 white =
     Element.rgb 1 1 1
 
 
-black : Element.Color
+black : Color
 black =
     Element.rgb 0 0 0
 
 
-elmBlue : Element.Color
+elmBlue : Color
 elmBlue =
     Element.rgb255 96 181 204
 
 
-elmGreen : Element.Color
+elmGreen : Color
 elmGreen =
     Element.rgb255 127 209 59
 
 
-elmOrange : Element.Color
+elmOrange : Color
 elmOrange =
     Element.rgb255 240 173 0
 
 
-elmGray : Element.Color
+elmGray : Color
 elmGray =
     Element.rgb255 90 99 120
