@@ -1,14 +1,38 @@
 module Main exposing (main)
 
 import Browser
-import Element exposing (Color, Element, centerX, centerY, column, el, fill, height, padding, px, row, spacing, text, width)
+import Element
+    exposing
+        ( Color
+        , Element
+        , centerX
+        , centerY
+        , column
+        , el
+        , fill
+        , height
+        , padding
+        , px
+        , row
+        , spacing
+        , text
+        , width
+        )
 import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
+import Element.Lazy exposing (lazy, lazy3)
 import Fraction exposing (Fraction)
 import Html exposing (Html)
 import Random exposing (Generator)
+import Task exposing (Task)
+import Time
+import Time.Extra
+
+
+
+-- MAIN
 
 
 main : Program () Model Msg
@@ -21,9 +45,30 @@ main =
         }
 
 
-type alias Model =
-    { question : Maybe Question
+
+-- MODEL
+
+
+type GameState
+    = MainMenu
+    | Started StartedModel
+
+
+type alias StartedModel =
+    { question : Question
     , difficulty : Difficulty
+    , streak : Int
+    , correct : Int
+    , incorrect : Int
+    , numeratorAnswer : String
+    , denominatorAnswer : String
+    , questionStartTime : Time.Posix
+    , questionElapsedTime : Int
+    }
+
+
+type alias StartingModel =
+    { difficulty : Difficulty
     , streak : Int
     , correct : Int
     , incorrect : Int
@@ -32,26 +77,51 @@ type alias Model =
     }
 
 
+startingModelAndQuestionAndTime : StartingModel -> Question -> Time.Posix -> StartedModel
+startingModelAndQuestionAndTime startingModel question time =
+    { question = question
+    , difficulty = startingModel.difficulty
+    , streak = startingModel.streak
+    , correct = startingModel.correct
+    , incorrect = startingModel.incorrect
+    , numeratorAnswer = startingModel.numeratorAnswer
+    , denominatorAnswer = startingModel.denominatorAnswer
+    , questionStartTime = time
+    , questionElapsedTime = 0
+    }
+
+
+type alias Model =
+    { state : GameState
+    , zone : Time.Zone
+    }
+
+
 initialModel : Model
 initialModel =
-    { question = Nothing
-    , difficulty = Easy
-    , streak = 0
-    , correct = 0
-    , incorrect = 0
-    , numeratorAnswer = ""
-    , denominatorAnswer = ""
+    { state = MainMenu
+    , zone = Time.utc
     }
 
 
 init : flags -> ( Model, Cmd Msg )
 init _ =
-    ( initialModel, Cmd.none )
+    ( initialModel
+    , Task.perform AdjustTimeZone Time.here
+    )
+
+
+
+-- SUBSCRIPTIONS
 
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Sub.none
+    Time.every (1000 / 30) Tick
+
+
+
+-- UPDATE
 
 
 type Difficulty
@@ -60,97 +130,268 @@ type Difficulty
     | Hard
 
 
+timeForDifficulty : Difficulty -> Int
+timeForDifficulty difficulty =
+    case difficulty of
+        Easy ->
+            20000
+
+        Intermediate ->
+            15000
+
+        Hard ->
+            10000
+
+
 type Msg
     = GetNewQuestion
-    | NewQuestion Question
-    | SetDifficulty Difficulty
+    | GetStartingQuestion StartingModel
+    | NewQuestion Question Time.Posix
+    | FirstQuestion StartingModel Question Time.Posix
+    | StartGame StartingModel
     | UpdateNumeratorAnswer String
     | UpdateDenominatorAnswer String
     | SubmitCalculationAnswer Question
+    | BackToMainMenu
+    | Tick Time.Posix
+    | AdjustTimeZone Time.Zone
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         GetNewQuestion ->
-            ( model, Random.generate NewQuestion <| questionGenerator model.difficulty )
+            case model.state of
+                MainMenu ->
+                    ( model
+                    , Cmd.none
+                    )
 
-        NewQuestion question ->
-            ( { model | question = Just question }, Cmd.none )
+                Started startedModel ->
+                    ( model
+                    , getQuestionAndTime
+                        startedModel.difficulty
+                        (\question time -> NewQuestion question time)
+                    )
 
-        SetDifficulty difficulty ->
-            let
-                newModel : Model
-                newModel =
-                    { question = model.question
-                    , difficulty = difficulty
-                    , streak = 0
-                    , correct = 0
-                    , incorrect = 0
-                    , numeratorAnswer = ""
-                    , denominatorAnswer = ""
-                    }
-            in
-            update GetNewQuestion newModel
+        GetStartingQuestion startingModel ->
+            case model.state of
+                Started _ ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                MainMenu ->
+                    ( model
+                    , getQuestionAndTime
+                        startingModel.difficulty
+                        (\question time -> FirstQuestion startingModel question time)
+                    )
+
+        NewQuestion newQuestion time ->
+            case model.state of
+                MainMenu ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                Started startedModel ->
+                    let
+                        newStartedModel =
+                            { startedModel
+                                | question = newQuestion
+                                , questionStartTime = time
+                            }
+                    in
+                    ( { model | state = Started newStartedModel }
+                    , Cmd.none
+                    )
+
+        FirstQuestion startingModel question time ->
+            case model.state of
+                Started _ ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                MainMenu ->
+                    ( { model | state = Started <| startingModelAndQuestionAndTime startingModel question time }
+                    , Cmd.none
+                    )
+
+        StartGame startingModel ->
+            case model.state of
+                MainMenu ->
+                    update (GetStartingQuestion startingModel) model
+
+                Started _ ->
+                    ( model
+                    , Cmd.none
+                    )
 
         UpdateNumeratorAnswer numeratorAnswer ->
-            ( { model | numeratorAnswer = numeratorAnswer }, Cmd.none )
+            case model.state of
+                MainMenu ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                Started startedModel ->
+                    let
+                        newStartedModel =
+                            { startedModel | numeratorAnswer = numeratorAnswer }
+                    in
+                    ( { model | state = Started newStartedModel }
+                    , Cmd.none
+                    )
 
         UpdateDenominatorAnswer denominatorAnswer ->
-            ( { model | denominatorAnswer = denominatorAnswer }, Cmd.none )
+            case model.state of
+                MainMenu ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                Started startedModel ->
+                    let
+                        newStartedModel =
+                            { startedModel | denominatorAnswer = denominatorAnswer }
+                    in
+                    ( { model | state = Started newStartedModel }
+                    , Cmd.none
+                    )
 
         SubmitCalculationAnswer question ->
-            let
-                maybeFraction =
-                    Maybe.map2
-                        (\numerator denominator -> ( numerator, denominator ))
-                        (String.toInt model.numeratorAnswer)
-                        (String.toInt model.denominatorAnswer)
-                        |> Maybe.andThen Fraction.fromTuple
-            in
-            case maybeFraction of
-                Just fraction ->
-                    if Fraction.equal question.answer fraction then
+            case model.state of
+                MainMenu ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                Started startedModel ->
+                    let
+                        maybeFraction : Maybe Fraction
+                        maybeFraction =
+                            Maybe.map2
+                                (\numerator denominator -> Fraction.create numerator denominator)
+                                (String.toInt startedModel.numeratorAnswer)
+                                (String.toInt startedModel.denominatorAnswer)
+                                |> Maybe.andThen identity
+                    in
+                    case maybeFraction of
+                        Just fraction ->
+                            if Fraction.equal question.answer fraction then
+                                let
+                                    newStartedModel =
+                                        { startedModel
+                                            | streak = increment startedModel.streak
+                                            , correct = increment startedModel.correct
+                                            , numeratorAnswer = ""
+                                            , denominatorAnswer = ""
+                                        }
+                                in
+                                update
+                                    GetNewQuestion
+                                    { model | state = Started newStartedModel }
+
+                            else
+                                let
+                                    newStartedModel =
+                                        { startedModel
+                                            | streak = 0
+                                            , incorrect = increment startedModel.incorrect
+                                            , numeratorAnswer = ""
+                                            , denominatorAnswer = ""
+                                        }
+                                in
+                                update
+                                    GetNewQuestion
+                                    { model | state = Started newStartedModel }
+
+                        Nothing ->
+                            ( model
+                            , Cmd.none
+                            )
+
+        BackToMainMenu ->
+            init ()
+
+        Tick newTime ->
+            case model.state of
+                MainMenu ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                Started startedModel ->
+                    let
+                        timeAllowedPerQuestion =
+                            timeForDifficulty startedModel.difficulty
+
+                        timeDifference =
+                            Time.posixToMillis newTime - Time.posixToMillis startedModel.questionStartTime
+
+                        timeRemaining =
+                            timeAllowedPerQuestion - timeDifference
+                    in
+                    if timeRemaining < 0 then
                         let
-                            newModel =
-                                { question = model.question
-                                , difficulty = model.difficulty
-                                , streak = increment model.streak
-                                , correct = increment model.correct
-                                , incorrect = model.incorrect
-                                , numeratorAnswer = ""
-                                , denominatorAnswer = ""
+                            newStartedModel =
+                                { startedModel
+                                    | streak = 0
+                                    , incorrect = increment startedModel.incorrect
+                                    , numeratorAnswer = ""
+                                    , denominatorAnswer = ""
                                 }
                         in
-                        update GetNewQuestion newModel
+                        update
+                            GetNewQuestion
+                            { model | state = Started newStartedModel }
 
                     else
                         let
-                            newModel =
-                                { question = model.question
-                                , difficulty = model.difficulty
-                                , streak = 0
-                                , correct = model.correct
-                                , incorrect = increment model.incorrect
-                                , numeratorAnswer = ""
-                                , denominatorAnswer = ""
-                                }
+                            newStartedModel =
+                                { startedModel | questionElapsedTime = timeRemaining }
                         in
-                        update GetNewQuestion newModel
+                        ( { model | state = Started newStartedModel }
+                        , Cmd.none
+                        )
 
-                Nothing ->
-                    ( model, Cmd.none )
+        AdjustTimeZone newTimeZone ->
+            ( { model | zone = newTimeZone }
+            , Cmd.none
+            )
+
+
+getQuestionAndTime : Difficulty -> (Question -> Time.Posix -> Msg) -> Cmd Msg
+getQuestionAndTime difficulty f =
+    Task.perform identity
+        (Task.map2
+            f
+            (questionGenerator difficulty |> generatorToTask)
+            Time.now
+        )
+
+
+
+-- VIEW
 
 
 view : Model -> Html Msg
 view model =
     Element.layout
         []
-        (mainView model)
+        (case model.state of
+            MainMenu ->
+                mainMenuView
+
+            Started gameModel ->
+                gameStartedView model.zone gameModel
+        )
 
 
-mainView : Model -> Element Msg
-mainView model =
+mainMenuView : Element Msg
+mainMenuView =
     column
         [ centerX
         , centerY
@@ -160,26 +401,68 @@ mainView model =
             , spacing 20
             , padding 10
             ]
-            [ questionCounter "Correct" model.correct
-            , questionCounter "Incorrect" model.incorrect
-            , questionCounter "Streak" model.streak
+            [ setDifficultyButton Easy
+            , setDifficultyButton Intermediate
+            , setDifficultyButton Hard
+            ]
+        ]
+
+
+gameStartedView : Time.Zone -> StartedModel -> Element Msg
+gameStartedView zone model =
+    column
+        [ centerX
+        , centerY
+        ]
+        [ row
+            [ centerX
+            , centerY
+            , width fill
+            , padding 10
+            ]
+            [ Input.button
+                [ Background.color elmOrange
+                , padding 10
+                , Border.rounded 4
+                , Element.alignRight
+                ]
+                { onPress = Just BackToMainMenu
+                , label = text "Back to Main Menu"
+                }
+            ]
+        , row
+            [ Element.alignLeft
+            , centerY
+            , padding 10
+            ]
+            [ el
+                [ Font.alignLeft
+                ]
+                (model.questionElapsedTime
+                    |> Time.millisToPosix
+                    |> Time.Extra.posixToParts zone
+                    |> posixPartsToString
+                    |> String.padLeft 4 ' '
+                    |> (++) "Time remaining: "
+                    |> text
+                )
             ]
         , row
             [ centerX
             , spacing 20
             , padding 10
             ]
-            [ setDifficultyButton model.difficulty model.question Easy
-            , setDifficultyButton model.difficulty model.question Intermediate
-            , setDifficultyButton model.difficulty model.question Hard
+            [ lazy (questionCounter "Correct") model.correct
+            , lazy (questionCounter "Incorrect") model.incorrect
+            , lazy (questionCounter "Streak") model.streak
             ]
-        , case model.question of
-            Just question ->
-                questionView question model.numeratorAnswer model.denominatorAnswer
-
-            Nothing ->
-                text "Choose a difficulty from above to get started!"
+        , lazy3 questionView model.question model.numeratorAnswer model.denominatorAnswer
         ]
+
+
+posixPartsToString : Time.Extra.Parts -> String
+posixPartsToString parts =
+    String.fromInt parts.second ++ "." ++ String.fromInt (parts.millisecond // 100)
 
 
 questionCounter : String -> Int -> Element msg
@@ -195,28 +478,27 @@ questionCounter counterText count =
             (text counterText)
         , el
             [ centerX ]
-            (String.fromInt count
-                |> text
-            )
+            (String.fromInt count |> text)
         ]
 
 
-setDifficultyButton : Difficulty -> Maybe Question -> Difficulty -> Element Msg
-setDifficultyButton modelDifficulty maybeQuestion difficulty =
-    let
-        difficultyButtonColor =
-            if modelDifficulty == difficulty && isJust maybeQuestion then
-                elmBlue
-
-            else
-                elmGray
-    in
+setDifficultyButton : Difficulty -> Element Msg
+setDifficultyButton difficulty =
     Input.button
-        [ Background.color difficultyButtonColor
+        [ Background.color elmBlue
         , padding 10
         , Border.rounded 4
         ]
-        { onPress = Just <| SetDifficulty difficulty
+        { onPress =
+            { difficulty = difficulty
+            , streak = 0
+            , correct = 0
+            , incorrect = 0
+            , numeratorAnswer = ""
+            , denominatorAnswer = ""
+            }
+                |> StartGame
+                |> Just
         , label = text <| difficultyToString difficulty
         }
 
@@ -415,14 +697,10 @@ increment int =
     int + 1
 
 
-isJust : Maybe a -> Bool
-isJust maybe =
-    case maybe of
-        Just _ ->
-            True
-
-        Nothing ->
-            False
+generatorToTask : Generator a -> Task Never a
+generatorToTask generator =
+    Time.now
+        |> Task.map (Tuple.first << Random.step generator << Random.initialSeed << Time.posixToMillis)
 
 
 
