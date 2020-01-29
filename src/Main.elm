@@ -1,9 +1,11 @@
 module Main exposing (main)
 
 import Browser
+import Browser.Dom as Dom
 import Element
     exposing
-        ( Color
+        ( Attribute
+        , Color
         , Element
         , centerX
         , centerY
@@ -22,9 +24,10 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
-import Element.Lazy exposing (lazy, lazy3)
+import Element.Lazy exposing (lazy3)
 import Fraction exposing (Fraction)
 import Html exposing (Html)
+import Html.Attributes
 import Random exposing (Generator)
 import Task exposing (Task)
 import Time
@@ -130,17 +133,19 @@ type Difficulty
     | Hard
 
 
+{-| Time for each level of difficulty per fraction (in milliseconds).
+-}
 timeForDifficulty : Difficulty -> Int
 timeForDifficulty difficulty =
     case difficulty of
         Easy ->
-            20000
+            25000
 
         Intermediate ->
-            15000
+            20000
 
         Hard ->
-            10000
+            15000
 
 
 type Msg
@@ -155,6 +160,7 @@ type Msg
     | BackToMainMenu
     | Tick Time.Posix
     | AdjustTimeZone Time.Zone
+    | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
@@ -204,7 +210,7 @@ update msg model =
                             }
                     in
                     ( { model | state = Started newStartedModel }
-                    , Cmd.none
+                    , highlightNumeratorInput
                     )
 
         FirstQuestion startingModel question time ->
@@ -216,7 +222,7 @@ update msg model =
 
                 MainMenu ->
                     ( { model | state = Started <| startingModelAndQuestionAndTime startingModel question time }
-                    , Cmd.none
+                    , highlightNumeratorInput
                     )
 
         StartGame startingModel ->
@@ -362,6 +368,11 @@ update msg model =
             , Cmd.none
             )
 
+        NoOp ->
+            ( model
+            , Cmd.none
+            )
+
 
 getQuestionAndTime : Difficulty -> (Question -> Time.Posix -> Msg) -> Cmd Msg
 getQuestionAndTime difficulty f =
@@ -371,6 +382,11 @@ getQuestionAndTime difficulty f =
             (questionGenerator difficulty |> generatorToTask)
             Time.now
         )
+
+
+highlightNumeratorInput : Cmd Msg
+highlightNumeratorInput =
+    Task.attempt (\_ -> NoOp) (Dom.focus numeratorInputId)
 
 
 
@@ -397,6 +413,19 @@ mainMenuView =
         , centerY
         ]
         [ row
+            [ centerX
+            , spacing 20
+            , padding 10
+            ]
+            [ el
+                [ Font.size 64
+                , Font.family
+                    [ Font.sansSerif
+                    ]
+                ]
+                (text "Quickflash")
+            ]
+        , row
             [ centerX
             , spacing 20
             , padding 10
@@ -430,6 +459,7 @@ gameStartedView zone model =
                 , label = text "Back to Main Menu"
                 }
             ]
+        , lazy3 scoreTrackerView model.correct model.incorrect model.streak
         , row
             [ Element.alignLeft
             , centerY
@@ -447,22 +477,30 @@ gameStartedView zone model =
                     |> text
                 )
             ]
-        , row
-            [ centerX
-            , spacing 20
-            , padding 10
-            ]
-            [ lazy (questionCounter "Correct") model.correct
-            , lazy (questionCounter "Incorrect") model.incorrect
-            , lazy (questionCounter "Streak") model.streak
-            ]
         , lazy3 questionView model.question model.numeratorAnswer model.denominatorAnswer
         ]
 
 
 posixPartsToString : Time.Extra.Parts -> String
 posixPartsToString parts =
-    String.fromInt parts.second ++ "." ++ String.fromInt (parts.millisecond // 100)
+    let
+        centisecond =
+            parts.millisecond // 100
+    in
+    String.fromInt parts.second ++ "." ++ String.fromInt centisecond
+
+
+scoreTrackerView : Int -> Int -> Int -> Element msg
+scoreTrackerView correct incorrect streak =
+    row
+        [ centerX
+        , spacing 20
+        , padding 10
+        ]
+        [ questionCounter "Correct" correct
+        , questionCounter "Incorrect" incorrect
+        , questionCounter "Streak" streak
+        ]
 
 
 questionCounter : String -> Int -> Element msg
@@ -503,52 +541,68 @@ setDifficultyButton difficulty =
         }
 
 
-fractionView : Fraction -> Element msg
-fractionView fraction =
+fractionView : Attribute msg -> Fraction -> Element msg
+fractionView fontSize fraction =
+    let
+        numeratorAndDenominatorView num =
+            el
+                [ width fill
+                , Font.center
+                , fontSize
+                ]
+                (num
+                    |> String.fromInt
+                    |> text
+                )
+    in
     column
         [ Element.alignRight
         , spacing 10
         ]
-        [ el
-            [ width fill
-            , Font.center
-            ]
-            (fraction
-                |> Fraction.getNumerator
-                |> String.fromInt
-                |> text
-            )
+        [ fraction
+            |> Fraction.getNumerator
+            |> numeratorAndDenominatorView
         , el
             [ width fill
-            , height <| px 2
+            , height <| px 6
             , Background.color black
             ]
             Element.none
-        , el
-            [ width fill
-            , Font.center
-            ]
-            (fraction
-                |> Fraction.getDenominator
-                |> String.fromInt
-                |> text
-            )
+        , fraction
+            |> Fraction.getDenominator
+            |> numeratorAndDenominatorView
         ]
+
+
+numeratorInputId : String
+numeratorInputId =
+    "numerator-input"
 
 
 questionView : Question -> String -> String -> Element Msg
 questionView calculation numeratorAnswer denominatorAnswer =
+    let
+        fontSize =
+            Font.size 96
+    in
     column
         [ width fill ]
         [ row
             [ centerX
-            , spacing 10
+            , spacing 30
+            , padding 50
+            , Border.color elmGray
+            , Border.width 2
+            , Border.rounded 10
             ]
-            [ fractionView calculation.fraction1
-            , calculation.operation
-                |> operationToString
-                |> text
-            , fractionView calculation.fraction2
+            [ fractionView fontSize calculation.fraction1
+            , el
+                [ fontSize ]
+                (calculation.mathOperation
+                    |> operationToString
+                    |> text
+                )
+            , fractionView fontSize calculation.fraction2
             ]
         , column
             [ spacing 20
@@ -556,7 +610,8 @@ questionView calculation numeratorAnswer denominatorAnswer =
             , width fill
             ]
             [ Input.text
-                []
+                [ Element.htmlAttribute (Html.Attributes.id numeratorInputId)
+                ]
                 { onChange = UpdateNumeratorAnswer
                 , text = numeratorAnswer
                 , placeholder = Nothing
@@ -607,7 +662,7 @@ mathOperationGenerator =
 
 type alias Question =
     { fraction1 : Fraction
-    , operation : MathOperation
+    , mathOperation : MathOperation
     , fraction2 : Fraction
     , answer : Fraction
     }
@@ -651,14 +706,22 @@ fractionIntGenerator difficulty =
 
 fractionGenerator : Difficulty -> Generator Fraction
 fractionGenerator difficulty =
+    let
+        intGenerator =
+            fractionIntGenerator difficulty
+    in
     Random.map2
         (\numerator denominator -> Fraction.createUnsafe numerator denominator |> Fraction.simplify)
-        (fractionIntGenerator difficulty)
-        (fractionIntGenerator difficulty)
+        intGenerator
+        intGenerator
 
 
 questionGenerator : Difficulty -> Generator Question
 questionGenerator difficulty =
+    let
+        fracGenerator =
+            fractionGenerator difficulty
+    in
     Random.map3
         (\fraction1 mathOperation fraction2 ->
             Question
@@ -667,25 +730,29 @@ questionGenerator difficulty =
                 fraction2
                 (getCalculationAnswer fraction1 mathOperation fraction2)
         )
-        (fractionGenerator difficulty)
+        fracGenerator
         mathOperationGenerator
-        (fractionGenerator difficulty)
+        fracGenerator
 
 
 getCalculationAnswer : Fraction -> MathOperation -> Fraction -> Fraction
 getCalculationAnswer fraction1 mathOperation fraction2 =
-    case mathOperation of
-        Add ->
-            Fraction.add fraction1 fraction2
+    let
+        fractionOperationFunction =
+            case mathOperation of
+                Add ->
+                    Fraction.add
 
-        Subtract ->
-            Fraction.subtract fraction1 fraction2
+                Subtract ->
+                    Fraction.subtract
 
-        Multiply ->
-            Fraction.multiply fraction1 fraction2
+                Multiply ->
+                    Fraction.multiply
 
-        Divide ->
-            fractionUnsafeDivision fraction1 fraction2
+                Divide ->
+                    fractionUnsafeDivision
+    in
+    fractionOperationFunction fraction1 fraction2
 
 
 
@@ -697,6 +764,8 @@ increment int =
     int + 1
 
 
+{-| Turns a generator into a `Task` using the current time as the seed.
+-}
 generatorToTask : Generator a -> Task Never a
 generatorToTask generator =
     Time.now
@@ -721,8 +790,8 @@ difficultyToString difficulty =
 
 
 operationToString : MathOperation -> String
-operationToString operation =
-    case operation of
+operationToString mathOperation =
+    case mathOperation of
         Add ->
             "+"
 
