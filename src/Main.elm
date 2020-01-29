@@ -2,6 +2,7 @@ module Main exposing (main)
 
 import Browser
 import Browser.Dom as Dom
+import Browser.Events as Events
 import Element
     exposing
         ( Attribute
@@ -28,6 +29,7 @@ import Element.Lazy exposing (lazy3)
 import Fraction exposing (Fraction)
 import Html exposing (Html)
 import Html.Attributes
+import Json.Decode as Decode
 import Random exposing (Generator)
 import Task exposing (Task)
 import Time
@@ -120,7 +122,12 @@ init _ =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ =
-    Time.every (1000 / 30) Tick
+    Sub.batch
+        [ Time.every (1000 / 30) Tick
+        , Decode.field "key" Decode.string
+            |> Decode.map HandleKeyboardEvent
+            |> Events.onKeyDown
+        ]
 
 
 
@@ -160,6 +167,7 @@ type Msg
     | BackToMainMenu
     | Tick Time.Posix
     | AdjustTimeZone Time.Zone
+    | HandleKeyboardEvent String
     | NoOp
 
 
@@ -367,6 +375,22 @@ update msg model =
             ( { model | zone = newTimeZone }
             , Cmd.none
             )
+
+        HandleKeyboardEvent key ->
+            case model.state of
+                MainMenu ->
+                    ( model
+                    , Cmd.none
+                    )
+
+                Started startedModel ->
+                    if key == "Enter" then
+                        update (SubmitCalculationAnswer startedModel.question) model
+
+                    else
+                        ( model
+                        , Cmd.none
+                        )
 
         NoOp ->
             ( model
