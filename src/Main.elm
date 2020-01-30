@@ -461,7 +461,7 @@ view model =
                 row
                     [ centerX
                     , centerY
-                    , width (fill |> maximum 1280)
+                    , width (fill |> maximum 1260)
                     , height fill
                     ]
                     [ el
