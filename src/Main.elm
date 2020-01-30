@@ -14,6 +14,7 @@ import Element
         , el
         , fill
         , height
+        , maximum
         , padding
         , px
         , row
@@ -25,7 +26,7 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
-import Element.Lazy exposing (lazy3)
+import Element.Lazy exposing (lazy, lazy2, lazy3)
 import Fraction exposing (Fraction)
 import Html exposing (Html)
 import Html.Attributes
@@ -86,7 +87,7 @@ type alias StartingModel =
 
 type alias QuestionHistory =
     { question : Question
-    , submittedAnswer : Fraction
+    , submittedAnswer : Maybe Fraction
     }
 
 
@@ -194,7 +195,7 @@ update msg model =
                     ( model
                     , getQuestionAndTime
                         startedModel.difficulty
-                        (\question time -> NewQuestion question time)
+                        NewQuestion
                     )
 
         GetStartingQuestion startingModel ->
@@ -208,7 +209,7 @@ update msg model =
                     ( model
                     , getQuestionAndTime
                         startingModel.difficulty
-                        (\question time -> FirstQuestion startingModel question time)
+                        (FirstQuestion startingModel)
                     )
 
         NewQuestion newQuestion time ->
@@ -296,7 +297,7 @@ update msg model =
                         maybeFraction : Maybe Fraction
                         maybeFraction =
                             Maybe.map2
-                                (\numerator denominator -> Fraction.create numerator denominator)
+                                Fraction.create
                                 (String.toInt startedModel.numeratorAnswer)
                                 (String.toInt startedModel.denominatorAnswer)
                                 |> Maybe.andThen identity
@@ -305,17 +306,18 @@ update msg model =
                         Just fraction ->
                             if Fraction.equal question.answer fraction then
                                 let
+                                    questionHistory =
+                                        { question = startedModel.question
+                                        , submittedAnswer = Just fraction
+                                        }
+
                                     newStartedModel =
                                         { startedModel
                                             | streak = increment startedModel.streak
                                             , correct = increment startedModel.correct
                                             , numeratorAnswer = ""
                                             , denominatorAnswer = ""
-                                            , questionHistory =
-                                                { question = startedModel.question
-                                                , submittedAnswer = fraction
-                                                }
-                                                    :: startedModel.questionHistory
+                                            , questionHistory = questionHistory :: startedModel.questionHistory
                                         }
                                 in
                                 update
@@ -324,17 +326,18 @@ update msg model =
 
                             else
                                 let
+                                    questionHistory =
+                                        { question = startedModel.question
+                                        , submittedAnswer = Just fraction
+                                        }
+
                                     newStartedModel =
                                         { startedModel
                                             | streak = 0
                                             , incorrect = increment startedModel.incorrect
                                             , numeratorAnswer = ""
                                             , denominatorAnswer = ""
-                                            , questionHistory =
-                                                { question = startedModel.question
-                                                , submittedAnswer = fraction
-                                                }
-                                                    :: startedModel.questionHistory
+                                            , questionHistory = questionHistory :: startedModel.questionHistory
                                         }
                                 in
                                 update
@@ -369,12 +372,18 @@ update msg model =
                     in
                     if timeRemaining < 0 then
                         let
+                            questionHistory =
+                                { question = startedModel.question
+                                , submittedAnswer = Nothing
+                                }
+
                             newStartedModel =
                                 { startedModel
                                     | streak = 0
                                     , incorrect = increment startedModel.incorrect
                                     , numeratorAnswer = ""
                                     , denominatorAnswer = ""
+                                    , questionHistory = questionHistory :: startedModel.questionHistory
                                 }
                         in
                         update
@@ -442,6 +451,7 @@ view model =
         [ centerX
         , centerY
         , width fill
+        , height fill
         ]
         (case model.state of
             MainMenu ->
@@ -451,9 +461,14 @@ view model =
                 row
                     [ centerX
                     , centerY
-                    , width fill ]
-                    [ gameStartedView model.zone gameModel
-                    , questionHistoryView gameModel.questionHistory
+                    , width (fill |> maximum 1280)
+                    , height fill
+                    ]
+                    [ el
+                        [ width fill ]
+                        Element.none
+                    , lazy2 gameStartedView model.zone gameModel
+                    , lazy questionHistoryView gameModel.questionHistory
                     ]
         )
 
@@ -462,24 +477,79 @@ questionHistoryView : List QuestionHistory -> Element msg
 questionHistoryView questions =
     column
         [ Element.scrollbarY
-        , Element.clipY
         , padding 10
         , spacing 10
-        , width fill
+        , width (fill |> maximum 450)
+        , height (fill |> maximum 750)
         ]
         (questions
-            |> List.map questionHistoryIndividualView
+            |> reversedIndexesIndexedMapPlusOne questionHistoryIndividualView
         )
 
 
-questionHistoryIndividualView : QuestionHistory -> Element msg
-questionHistoryIndividualView history =
+questionHistoryIndividualView : Int -> QuestionHistory -> Element msg
+questionHistoryIndividualView number history =
+    let
+        fraction1 =
+            fractionToSimpleString history.question.fraction1
+
+        mathOperation =
+            mathOperationToString history.question.mathOperation
+
+        fraction2 =
+            fractionToSimpleString history.question.fraction2
+
+        actualAnswer =
+            fractionToSimpleString history.question.answer
+
+        submittedAnswer =
+            case history.submittedAnswer of
+                Just userAnswer ->
+                    fractionToSimpleString userAnswer
+
+                Nothing ->
+                    "Time limit reached"
+
+        correct =
+            case history.submittedAnswer of
+                Just validAnswer ->
+                    Fraction.equal history.question.answer validAnswer
+
+                Nothing ->
+                    False
+
+        colorForAnswer =
+            if correct then
+                Element.rgb255 92 184 92
+
+            else
+                Element.rgb255 217 83 79
+
+        borderWidth =
+            2
+    in
     row
-        []
-        [ column
-            []
-            [ text <| fractionToSimpleString history.question.fraction1 ++ " " ++ mathOperationToString history.question.mathOperation ++ " " ++ fractionToSimpleString history.question.fraction2
-            , text <| "Submitted Answer: " ++ fractionToSimpleString history.submittedAnswer
+        [ centerY
+        , Border.widthEach
+            { bottom = borderWidth
+            , left = borderWidth
+            , right = 0
+            , top = 0
+            }
+        , Border.color elmGray
+        , Border.solid
+        , spacing 10
+        , padding 5
+        ]
+        [ el
+            [ Font.bold ]
+            (text <| String.fromInt number)
+        , column
+            [ spacing 5 ]
+            [ text <| fraction1 ++ " " ++ mathOperation ++ " " ++ fraction2 ++ " = " ++ actualAnswer
+            , el
+                [ Font.color colorForAnswer ]
+                (text submittedAnswer)
             ]
         ]
 
@@ -550,23 +620,18 @@ gameStartedView zone model =
                 }
             ]
         , lazy3 scoreTrackerView model.correct model.incorrect model.streak
-        , row
-            [ Element.alignLeft
-            , centerY
+        , el
+            [ Font.alignLeft
             , padding 10
             ]
-            [ el
-                [ Font.alignLeft
-                ]
-                (model.questionElapsedTime
-                    |> Time.millisToPosix
-                    |> Time.Extra.posixToParts zone
-                    |> posixPartsToString
-                    |> String.padLeft 4 ' '
-                    |> (++) "Time remaining: "
-                    |> text
-                )
-            ]
+            (model.questionElapsedTime
+                |> Time.millisToPosix
+                |> Time.Extra.posixToParts zone
+                |> posixPartsToString
+                |> String.padLeft 4 ' '
+                |> (++) "Time remaining: "
+                |> text
+            )
         , lazy3 questionView model.question model.numeratorAnswer model.denominatorAnswer
         ]
 
@@ -647,8 +712,8 @@ fractionView fontSize fraction =
                 )
     in
     column
-        [ Element.alignRight
-        , spacing 10
+        [ spacing 10
+        , centerX
         ]
         [ fraction
             |> Fraction.getNumerator
@@ -671,29 +736,34 @@ numeratorInputId =
 
 
 questionView : Question -> String -> String -> Element Msg
-questionView calculation numeratorAnswer denominatorAnswer =
+questionView question numeratorAnswer denominatorAnswer =
     let
         fontSize =
             Font.size 96
     in
     column
-        [ width fill ]
+        [ width fill
+        , centerX
+        ]
         [ row
             [ centerX
             , spacing 30
-            , padding 50
+            , padding 30
             , Border.color elmGray
             , Border.width 2
             , Border.rounded 10
+            , width (px 450)
             ]
-            [ fractionView fontSize calculation.fraction1
+            [ fractionView fontSize question.fraction1
             , el
-                [ fontSize ]
-                (calculation.mathOperation
+                [ fontSize
+                , centerX
+                ]
+                (question.mathOperation
                     |> mathOperationToString
                     |> text
                 )
-            , fractionView fontSize calculation.fraction2
+            , fractionView fontSize question.fraction2
             ]
         , column
             [ spacing 20
@@ -722,7 +792,7 @@ questionView calculation numeratorAnswer denominatorAnswer =
                 , spacing 20
                 , padding 20
                 ]
-                { onPress = Just <| SubmitCalculationAnswer calculation
+                { onPress = Just <| SubmitCalculationAnswer question
                 , label =
                     el
                         [ centerX
@@ -762,27 +832,18 @@ type alias Question =
 difficultyFractionBounds : Difficulty -> ( Int, Int )
 difficultyFractionBounds difficulty =
     let
-        easyBound =
-            5
+        bound =
+            case difficulty of
+                Easy ->
+                    5
 
-        intermediateBound =
-            10
+                Intermediate ->
+                    10
 
-        hardBound =
-            20
-
-        getBounds bound =
-            ( negate bound, bound )
+                Hard ->
+                    20
     in
-    case difficulty of
-        Easy ->
-            getBounds easyBound
-
-        Intermediate ->
-            getBounds intermediateBound
-
-        Hard ->
-            getBounds hardBound
+    ( negate bound, bound )
 
 
 fractionIntGenerator : Difficulty -> Generator Int
@@ -844,6 +905,7 @@ getCalculationAnswer fraction1 mathOperation fraction2 =
                     fractionUnsafeDivision
     in
     fractionOperationFunction fraction1 fraction2
+        |> Fraction.simplify
 
 
 
@@ -861,6 +923,27 @@ generatorToTask : Generator a -> Task Never a
 generatorToTask generator =
     Time.now
         |> Task.map (Tuple.first << Random.step generator << Random.initialSeed << Time.posixToMillis)
+
+
+{-| The same as `List.indexedMap`, except that the indexes are reversed and incremented by one.
+-}
+reversedIndexesIndexedMapPlusOne : (Int -> a -> b) -> List a -> List b
+reversedIndexesIndexedMapPlusOne f xs =
+    List.map2 f (reverseRange (List.length xs) 1) xs
+
+
+reverseRange : Int -> Int -> List Int
+reverseRange hi lo =
+    reverseRangeHelp hi lo []
+
+
+reverseRangeHelp : Int -> Int -> List Int -> List Int
+reverseRangeHelp hi lo list =
+    if hi >= lo then
+        reverseRangeHelp hi (lo + 1) (lo :: list)
+
+    else
+        list
 
 
 
