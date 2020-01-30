@@ -67,6 +67,7 @@ type alias StartedModel =
     , incorrect : Int
     , numeratorAnswer : String
     , denominatorAnswer : String
+    , questionHistory : List QuestionHistory
     , questionStartTime : Time.Posix
     , questionElapsedTime : Int
     }
@@ -79,6 +80,13 @@ type alias StartingModel =
     , incorrect : Int
     , numeratorAnswer : String
     , denominatorAnswer : String
+    , questionHistory : List QuestionHistory
+    }
+
+
+type alias QuestionHistory =
+    { question : Question
+    , submittedAnswer : Fraction
     }
 
 
@@ -91,6 +99,7 @@ startingModelAndQuestionAndTime startingModel question time =
     , incorrect = startingModel.incorrect
     , numeratorAnswer = startingModel.numeratorAnswer
     , denominatorAnswer = startingModel.denominatorAnswer
+    , questionHistory = []
     , questionStartTime = time
     , questionElapsedTime = 0
     }
@@ -302,6 +311,11 @@ update msg model =
                                             , correct = increment startedModel.correct
                                             , numeratorAnswer = ""
                                             , denominatorAnswer = ""
+                                            , questionHistory =
+                                                { question = startedModel.question
+                                                , submittedAnswer = fraction
+                                                }
+                                                    :: startedModel.questionHistory
                                         }
                                 in
                                 update
@@ -316,6 +330,11 @@ update msg model =
                                             , incorrect = increment startedModel.incorrect
                                             , numeratorAnswer = ""
                                             , denominatorAnswer = ""
+                                            , questionHistory =
+                                                { question = startedModel.question
+                                                , submittedAnswer = fraction
+                                                }
+                                                    :: startedModel.questionHistory
                                         }
                                 in
                                 update
@@ -420,14 +439,61 @@ highlightNumeratorInput =
 view : Model -> Html Msg
 view model =
     Element.layout
-        []
+        [ centerX
+        , centerY
+        , width fill
+        ]
         (case model.state of
             MainMenu ->
                 mainMenuView
 
             Started gameModel ->
-                gameStartedView model.zone gameModel
+                row
+                    [ centerX
+                    , centerY
+                    , width fill ]
+                    [ gameStartedView model.zone gameModel
+                    , questionHistoryView gameModel.questionHistory
+                    ]
         )
+
+
+questionHistoryView : List QuestionHistory -> Element msg
+questionHistoryView questions =
+    column
+        [ Element.scrollbarY
+        , Element.clipY
+        , padding 10
+        , spacing 10
+        , width fill
+        ]
+        (questions
+            |> List.map questionHistoryIndividualView
+        )
+
+
+questionHistoryIndividualView : QuestionHistory -> Element msg
+questionHistoryIndividualView history =
+    row
+        []
+        [ column
+            []
+            [ text <| fractionToSimpleString history.question.fraction1 ++ " " ++ mathOperationToString history.question.mathOperation ++ " " ++ fractionToSimpleString history.question.fraction2
+            , text <| "Submitted Answer: " ++ fractionToSimpleString history.submittedAnswer
+            ]
+        ]
+
+
+fractionToSimpleString : Fraction -> String
+fractionToSimpleString fraction =
+    let
+        numerator =
+            Fraction.getNumerator fraction
+
+        denominator =
+            Fraction.getDenominator fraction
+    in
+    "(" ++ String.fromInt numerator ++ " / " ++ String.fromInt denominator ++ ")"
 
 
 mainMenuView : Element Msg
@@ -558,6 +624,7 @@ setDifficultyButton difficulty =
             , incorrect = 0
             , numeratorAnswer = ""
             , denominatorAnswer = ""
+            , questionHistory = []
             }
                 |> StartGame
                 |> Just
@@ -623,7 +690,7 @@ questionView calculation numeratorAnswer denominatorAnswer =
             , el
                 [ fontSize ]
                 (calculation.mathOperation
-                    |> operationToString
+                    |> mathOperationToString
                     |> text
                 )
             , fractionView fontSize calculation.fraction2
@@ -813,8 +880,8 @@ difficultyToString difficulty =
             "Hard"
 
 
-operationToString : MathOperation -> String
-operationToString mathOperation =
+mathOperationToString : MathOperation -> String
+mathOperationToString mathOperation =
     case mathOperation of
         Add ->
             "+"
