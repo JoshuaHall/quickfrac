@@ -26,6 +26,7 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
+import Element.Keyed as Keyed
 import Element.Lazy exposing (lazy, lazy2, lazy3, lazy4)
 import Fraction exposing (Fraction)
 import Html exposing (Html)
@@ -468,7 +469,7 @@ view model =
 
 questionHistoryView : List QuestionHistory -> Element msg
 questionHistoryView questions =
-    column
+    Keyed.column
         [ Element.scrollbarY
         , padding 10
         , spacing 10
@@ -480,7 +481,7 @@ questionHistoryView questions =
         )
 
 
-questionHistoryIndividualView : Int -> QuestionHistory -> Element msg
+questionHistoryIndividualView : Int -> QuestionHistory -> ( String, Element msg )
 questionHistoryIndividualView number history =
     let
         fraction1 =
@@ -520,8 +521,13 @@ questionHistoryIndividualView number history =
 
         borderWidth =
             2
+
+        indexString =
+            number
+                |> String.fromInt
     in
-    row
+    ( indexString
+    , row
         [ centerY
         , Border.widthEach
             { bottom = borderWidth
@@ -536,15 +542,19 @@ questionHistoryIndividualView number history =
         ]
         [ el
             [ Font.bold ]
-            (text <| String.fromInt number)
+            (indexString
+                |> text
+            )
         , column
             [ spacing 5 ]
-            [ text <| fraction1 ++ " " ++ mathOperation ++ " " ++ fraction2 ++ " = " ++ actualAnswer
+            [ (fraction1 ++ " " ++ mathOperation ++ " " ++ fraction2 ++ " = " ++ actualAnswer)
+                |> text
             , el
                 [ Font.color colorForAnswer ]
                 (text submittedAnswer)
             ]
         ]
+    )
 
 
 fractionToSimpleString : Fraction -> String
@@ -689,7 +699,10 @@ setDifficultyButton difficulty =
                 [ centerX
                 , Font.color white
                 ]
-                (text <| difficultyToString difficulty)
+                (difficulty
+                    |> difficultyToString
+                    |> text
+                )
         }
 
 
