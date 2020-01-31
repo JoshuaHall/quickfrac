@@ -335,7 +335,9 @@ update msg model =
                         Nothing ->
                             let
                                 newStartedModel =
-                                    { startedModel | answerValidationFeedback = "Invalid Fraction input. Check your input and try again." }
+                                    { startedModel
+                                        | answerValidationFeedback = "Invalid Fraction input. Check your input and try again."
+                                    }
                             in
                             ( { model | state = Started newStartedModel }
                             , Cmd.none
@@ -405,7 +407,9 @@ update msg model =
 
                 Started startedModel ->
                     if key == "Enter" then
-                        update (SubmitCalculationAnswer startedModel.question) model
+                        update
+                            (SubmitCalculationAnswer startedModel.question)
+                            model
 
                     else
                         ( model
@@ -542,9 +546,7 @@ questionHistoryIndividualView number history =
         ]
         [ el
             [ Font.bold ]
-            (indexString
-                |> text
-            )
+            (text indexString)
         , column
             [ spacing 5 ]
             [ (fraction1 ++ " " ++ mathOperation ++ " " ++ fraction2 ++ " = " ++ actualAnswer)
@@ -679,7 +681,10 @@ questionCounter counterText count =
             (text counterText)
         , el
             [ centerX ]
-            (String.fromInt count |> text)
+            (count
+                |> String.fromInt
+                |> text
+            )
         ]
 
 
