@@ -163,17 +163,17 @@ timeForDifficulty difficulty =
 
 
 type Msg
-    = GetNewQuestion
-    | NewQuestion Question Time.Posix
-    | FirstQuestion Difficulty Question Time.Posix
-    | StartGame Difficulty
-    | UpdateNumeratorAnswer String
-    | UpdateDenominatorAnswer String
+    = StartGame Difficulty
     | SubmitCalculationAnswer Question
     | BackToMainMenu
+    | HandleKeyboardEvent String
+    | UpdateNumeratorAnswer String
+    | UpdateDenominatorAnswer String
+    | GetNewQuestion
+    | FirstQuestion Difficulty Question Time.Posix
+    | NewQuestion Question Time.Posix
     | Tick Time.Posix
     | AdjustTimeZone Time.Zone
-    | HandleKeyboardEvent String
     | NoOp
 
 
