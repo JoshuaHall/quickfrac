@@ -44,7 +44,7 @@ import Time.Extra
 main : Program () Model Msg
 main =
     Browser.element
-        { init = init
+        { init = initWithFlags
         , subscriptions = subscriptions
         , update = update
         , view = view
@@ -74,32 +74,21 @@ type alias StartedModel =
     }
 
 
-type alias StartingModel =
-    { difficulty : Difficulty
-    , streak : Int
-    , correct : Int
-    , incorrect : Int
-    , numeratorAnswer : String
-    , denominatorAnswer : String
-    , questionHistory : List QuestionHistory
-    }
-
-
 type alias QuestionHistory =
     { question : Question
     , submittedAnswer : Maybe Fraction
     }
 
 
-startingModelAndQuestionAndTime : StartingModel -> Question -> Time.Posix -> StartedModel
-startingModelAndQuestionAndTime startingModel question time =
+startingModelAndQuestionAndTime : Difficulty -> Question -> Time.Posix -> StartedModel
+startingModelAndQuestionAndTime difficulty question time =
     { question = question
-    , difficulty = startingModel.difficulty
-    , streak = startingModel.streak
-    , correct = startingModel.correct
-    , incorrect = startingModel.incorrect
-    , numeratorAnswer = startingModel.numeratorAnswer
-    , denominatorAnswer = startingModel.denominatorAnswer
+    , difficulty = difficulty
+    , streak = 0
+    , correct = 0
+    , incorrect = 0
+    , numeratorAnswer = ""
+    , denominatorAnswer = ""
     , questionHistory = []
     , questionStartTime = time
     , questionElapsedTime = 0
@@ -119,8 +108,13 @@ initialModel =
     }
 
 
-init : flags -> ( Model, Cmd Msg )
-init _ =
+initWithFlags : flags -> ( Model, Cmd Msg )
+initWithFlags _ =
+    init
+
+
+init : ( Model, Cmd Msg )
+init =
     ( initialModel
     , Task.perform AdjustTimeZone Time.here
     )
@@ -167,10 +161,9 @@ timeForDifficulty difficulty =
 
 type Msg
     = GetNewQuestion
-    | GetStartingQuestion StartingModel
     | NewQuestion Question Time.Posix
-    | FirstQuestion StartingModel Question Time.Posix
-    | StartGame StartingModel
+    | FirstQuestion Difficulty Question Time.Posix
+    | StartGame Difficulty
     | UpdateNumeratorAnswer String
     | UpdateDenominatorAnswer String
     | SubmitCalculationAnswer Question
@@ -198,20 +191,6 @@ update msg model =
                         NewQuestion
                     )
 
-        GetStartingQuestion startingModel ->
-            case model.state of
-                Started _ ->
-                    ( model
-                    , Cmd.none
-                    )
-
-                MainMenu ->
-                    ( model
-                    , getQuestionAndTime
-                        startingModel.difficulty
-                        (FirstQuestion startingModel)
-                    )
-
         NewQuestion newQuestion time ->
             case model.state of
                 MainMenu ->
@@ -228,10 +207,10 @@ update msg model =
                             }
                     in
                     ( { model | state = Started newStartedModel }
-                    , highlightNumeratorInput
+                    , focusNumeratorInput
                     )
 
-        FirstQuestion startingModel question time ->
+        FirstQuestion difficulty question time ->
             case model.state of
                 Started _ ->
                     ( model
@@ -239,18 +218,22 @@ update msg model =
                     )
 
                 MainMenu ->
-                    ( { model | state = Started <| startingModelAndQuestionAndTime startingModel question time }
-                    , highlightNumeratorInput
+                    ( { model | state = Started <| startingModelAndQuestionAndTime difficulty question time }
+                    , focusNumeratorInput
                     )
 
-        StartGame startingModel ->
+        StartGame difficulty ->
             case model.state of
-                MainMenu ->
-                    update (GetStartingQuestion startingModel) model
-
                 Started _ ->
                     ( model
                     , Cmd.none
+                    )
+
+                MainMenu ->
+                    ( model
+                    , getQuestionAndTime
+                        difficulty
+                        (FirstQuestion difficulty)
                     )
 
         UpdateNumeratorAnswer numeratorAnswer ->
@@ -350,7 +333,7 @@ update msg model =
                             )
 
         BackToMainMenu ->
-            init ()
+            init
 
         Tick newTime ->
             case model.state of
@@ -436,9 +419,11 @@ getQuestionAndTime difficulty f =
         )
 
 
-highlightNumeratorInput : Cmd Msg
-highlightNumeratorInput =
-    Task.attempt (\_ -> NoOp) (Dom.focus numeratorInputId)
+focusNumeratorInput : Cmd Msg
+focusNumeratorInput =
+    Task.attempt
+        (\_ -> NoOp)
+        (Dom.focus numeratorInputId)
 
 
 
@@ -616,7 +601,12 @@ gameStartedView zone model =
                 , Element.alignRight
                 ]
                 { onPress = Just BackToMainMenu
-                , label = text "Back to Main Menu"
+                , label =
+                    el
+                        [ centerX
+                        , Font.color white
+                        ]
+                        (text "Back to Main Menu")
                 }
             ]
         , lazy3 scoreTrackerView model.correct model.incorrect model.streak
@@ -683,17 +673,15 @@ setDifficultyButton difficulty =
         , Border.rounded 4
         ]
         { onPress =
-            { difficulty = difficulty
-            , streak = 0
-            , correct = 0
-            , incorrect = 0
-            , numeratorAnswer = ""
-            , denominatorAnswer = ""
-            , questionHistory = []
-            }
+            difficulty
                 |> StartGame
                 |> Just
-        , label = text <| difficultyToString difficulty
+        , label =
+            el
+                [ centerX
+                , Font.color white
+                ]
+                (text <| difficultyToString difficulty)
         }
 
 
