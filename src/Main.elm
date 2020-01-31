@@ -26,7 +26,7 @@ import Element.Background as Background
 import Element.Border as Border
 import Element.Font as Font
 import Element.Input as Input
-import Element.Lazy exposing (lazy, lazy2, lazy3)
+import Element.Lazy exposing (lazy, lazy2, lazy3, lazy4)
 import Fraction exposing (Fraction)
 import Html exposing (Html)
 import Html.Attributes
@@ -68,6 +68,7 @@ type alias StartedModel =
     , incorrect : Int
     , numeratorAnswer : String
     , denominatorAnswer : String
+    , answerValidationFeedback : String
     , questionHistory : List QuestionHistory
     , questionStartTime : Time.Posix
     , questionElapsedTime : Int
@@ -89,6 +90,7 @@ startingModelAndQuestionAndTime difficulty question time =
     , incorrect = 0
     , numeratorAnswer = ""
     , denominatorAnswer = ""
+    , answerValidationFeedback = ""
     , questionHistory = []
     , questionStartTime = time
     , questionElapsedTime = 0
@@ -300,6 +302,7 @@ update msg model =
                                             , correct = increment startedModel.correct
                                             , numeratorAnswer = ""
                                             , denominatorAnswer = ""
+                                            , answerValidationFeedback = ""
                                             , questionHistory = questionHistory :: startedModel.questionHistory
                                         }
                                 in
@@ -320,6 +323,7 @@ update msg model =
                                             , incorrect = increment startedModel.incorrect
                                             , numeratorAnswer = ""
                                             , denominatorAnswer = ""
+                                            , answerValidationFeedback = ""
                                             , questionHistory = questionHistory :: startedModel.questionHistory
                                         }
                                 in
@@ -328,7 +332,11 @@ update msg model =
                                     { model | state = Started newStartedModel }
 
                         Nothing ->
-                            ( model
+                            let
+                                newStartedModel =
+                                    { startedModel | answerValidationFeedback = "Invalid Fraction input. Check your input and try again." }
+                            in
+                            ( { model | state = Started newStartedModel }
                             , Cmd.none
                             )
 
@@ -505,10 +513,10 @@ questionHistoryIndividualView number history =
 
         colorForAnswer =
             if correct then
-                Element.rgb255 92 184 92
+                bootstrapGreen
 
             else
-                Element.rgb255 217 83 79
+                bootstrapRed
 
         borderWidth =
             2
@@ -622,7 +630,7 @@ gameStartedView zone model =
                 |> (++) "Time remaining: "
                 |> text
             )
-        , lazy3 questionView model.question model.numeratorAnswer model.denominatorAnswer
+        , lazy4 questionView model.question model.numeratorAnswer model.denominatorAnswer model.answerValidationFeedback
         ]
 
 
@@ -723,8 +731,8 @@ numeratorInputId =
     "numerator-input"
 
 
-questionView : Question -> String -> String -> Element Msg
-questionView question numeratorAnswer denominatorAnswer =
+questionView : Question -> String -> String -> String -> Element Msg
+questionView question numeratorAnswer denominatorAnswer answerValidationFeedback =
     let
         fontSize =
             Font.size 96
@@ -773,6 +781,13 @@ questionView question numeratorAnswer denominatorAnswer =
                 , placeholder = Nothing
                 , label = Input.labelAbove [] (text "Denominator")
                 }
+            , if String.isEmpty answerValidationFeedback then
+                Element.none
+
+              else
+                el
+                    [ Font.color bootstrapRed ]
+                    (text answerValidationFeedback)
             , Input.button
                 [ width fill
                 , Background.color elmGreen
@@ -780,7 +795,10 @@ questionView question numeratorAnswer denominatorAnswer =
                 , spacing 20
                 , padding 20
                 ]
-                { onPress = Just <| SubmitCalculationAnswer question
+                { onPress =
+                    question
+                        |> SubmitCalculationAnswer
+                        |> Just
                 , label =
                     el
                         [ centerX
@@ -1015,3 +1033,13 @@ elmOrange =
 elmGray : Color
 elmGray =
     Element.rgb255 90 99 120
+
+
+bootstrapGreen : Color
+bootstrapGreen =
+    Element.rgb255 92 184 92
+
+
+bootstrapRed : Color
+bootstrapRed =
+    Element.rgb255 217 83 79
