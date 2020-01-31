@@ -5,6 +5,5 @@ repl-temp-*
 # elm make generated files
 elm.js
 elm.min.js
-
 # Visual Studio Code files
 .vscode/
