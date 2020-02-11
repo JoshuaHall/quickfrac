@@ -82,13 +82,18 @@ type alias QuestionHistory =
     }
 
 
+startingQuestionCounter : Int
+startingQuestionCounter =
+    0
+
+
 startingModelAndQuestionAndTime : Difficulty -> Question -> Time.Posix -> StartedModel
 startingModelAndQuestionAndTime difficulty question time =
     { question = question
     , difficulty = difficulty
-    , streak = 0
-    , correct = 0
-    , incorrect = 0
+    , streak = startingQuestionCounter
+    , correct = startingQuestionCounter
+    , incorrect = startingQuestionCounter
     , numeratorAnswer = ""
     , denominatorAnswer = ""
     , answerValidationFeedback = ""
@@ -130,7 +135,7 @@ init =
 subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch
-        [ Time.every (1000 / 30) Tick
+        [ Time.every (millisecondsPerSecond / 30) Tick
         , Decode.field "key" Decode.string
             |> Decode.map HandleKeyboardEvent
             |> Events.onKeyDown
@@ -149,17 +154,21 @@ type Difficulty
 
 {-| Time for each level of difficulty per fraction (in milliseconds).
 -}
-timeForDifficulty : Difficulty -> Int
-timeForDifficulty difficulty =
-    case difficulty of
-        Easy ->
-            25000
+millisecondsPerQuestion : Difficulty -> Int
+millisecondsPerQuestion difficulty =
+    let
+        secondsPerQuestion =
+            case difficulty of
+                Easy ->
+                    30
 
-        Intermediate ->
-            20000
+                Intermediate ->
+                    25
 
-        Hard ->
-            15000
+                Hard ->
+                    20
+    in
+    secondsPerQuestion * millisecondsPerSecond
 
 
 type Msg
@@ -320,7 +329,7 @@ update msg model =
 
                                     newStartedModel =
                                         { startedModel
-                                            | streak = 0
+                                            | streak = startingQuestionCounter
                                             , incorrect = increment startedModel.incorrect
                                             , numeratorAnswer = ""
                                             , denominatorAnswer = ""
@@ -356,7 +365,7 @@ update msg model =
                 Started startedModel ->
                     let
                         timeAllowedPerQuestion =
-                            timeForDifficulty startedModel.difficulty
+                            millisecondsPerQuestion startedModel.difficulty
 
                         timeDifference =
                             Time.posixToMillis newTime - Time.posixToMillis startedModel.questionStartTime
@@ -373,7 +382,7 @@ update msg model =
 
                             newStartedModel =
                                 { startedModel
-                                    | streak = 0
+                                    | streak = startingQuestionCounter
                                     , incorrect = increment startedModel.incorrect
                                     , numeratorAnswer = ""
                                     , denominatorAnswer = ""
@@ -937,8 +946,8 @@ getCalculationAnswer fraction1 mathOperation fraction2 =
 
 
 increment : Int -> Int
-increment int =
-    int + 1
+increment =
+    (+) 1
 
 
 {-| Turns a generator into a `Task` using the current time as the seed.
@@ -957,17 +966,26 @@ reversedIndexesIndexedMapPlusOne f xs =
 
 
 reverseRange : Int -> Int -> List Int
-reverseRange hi lo =
-    reverseRangeHelp hi lo []
+reverseRange =
+    reverseRangeHelp []
 
 
-reverseRangeHelp : Int -> Int -> List Int -> List Int
-reverseRangeHelp hi lo list =
+reverseRangeHelp : List Int -> Int -> Int -> List Int
+reverseRangeHelp list hi lo =
     if hi >= lo then
-        reverseRangeHelp hi (lo + 1) (lo :: list)
+        reverseRangeHelp (lo :: list) hi (increment lo)
 
     else
         list
+
+
+
+-- TIME HELPERS
+
+
+millisecondsPerSecond : number
+millisecondsPerSecond =
+    1000
 
 
 
