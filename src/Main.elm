@@ -597,7 +597,7 @@ mainMenuView =
                     [ Font.sansSerif
                     ]
                 ]
-                (text "Quickflash")
+                (text "Quickfrac")
             ]
         , row
             [ centerX
