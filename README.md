@@ -1,4 +1,4 @@
-# quickflash
+# quickfrac
 
 A flashcard game to learn fractions written in Elm.
 
