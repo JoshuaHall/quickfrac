@@ -34,7 +34,7 @@ import Html.Attributes
 import Json.Decode as Decode
 import Random exposing (Generator)
 import Task exposing (Task)
-import Time
+import Time exposing (Posix)
 import Time.Extra
 
 
@@ -71,7 +71,7 @@ type alias StartedModel =
     , denominatorAnswer : String
     , answerValidationFeedback : String
     , questionHistory : List QuestionHistory
-    , questionStartTime : Time.Posix
+    , questionStartTime : Posix
     , questionElapsedTime : Int
     }
 
@@ -87,7 +87,7 @@ startingQuestionCounter =
     0
 
 
-startingModelAndQuestionAndTime : Difficulty -> Question -> Time.Posix -> StartedModel
+startingModelAndQuestionAndTime : Difficulty -> Question -> Posix -> StartedModel
 startingModelAndQuestionAndTime difficulty question time =
     { question = question
     , difficulty = difficulty
@@ -173,219 +173,97 @@ millisecondsPerQuestion difficulty =
 
 type Msg
     = StartGame Difficulty
-    | SubmitCalculationAnswer Question
-    | BackToMainMenu
-    | HandleKeyboardEvent String
+    | FirstQuestion Difficulty Question Posix
+    | GetNewQuestion
+    | NewQuestion Question Posix
     | UpdateNumeratorAnswer String
     | UpdateDenominatorAnswer String
-    | GetNewQuestion
-    | FirstQuestion Difficulty Question Time.Posix
-    | NewQuestion Question Time.Posix
-    | Tick Time.Posix
+    | SubmitCalculationAnswer Question
+    | BackToMainMenu
+    | Tick Posix
     | AdjustTimeZone Time.Zone
+    | HandleKeyboardEvent String
     | NoOp
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
-    case msg of
-        GetNewQuestion ->
-            case model.state of
-                MainMenu ->
-                    ( model
-                    , Cmd.none
-                    )
+    case ( msg, model.state ) of
+        ( StartGame difficulty, MainMenu ) ->
+            ( model
+            , getQuestionAndTime
+                difficulty
+                (FirstQuestion difficulty)
+            )
 
-                Started startedModel ->
-                    ( model
-                    , getQuestionAndTime
-                        startedModel.difficulty
-                        NewQuestion
-                    )
+        ( FirstQuestion difficulty question time, MainMenu ) ->
+            ( { model | state = Started <| startingModelAndQuestionAndTime difficulty question time }
+            , focusNumeratorInput
+            )
 
-        NewQuestion newQuestion time ->
-            case model.state of
-                MainMenu ->
-                    ( model
-                    , Cmd.none
-                    )
+        ( GetNewQuestion, Started startedModel ) ->
+            ( model
+            , getQuestionAndTime
+                startedModel.difficulty
+                NewQuestion
+            )
 
-                Started startedModel ->
-                    let
-                        newStartedModel =
-                            { startedModel
-                                | question = newQuestion
-                                , questionStartTime = time
-                            }
-                    in
-                    ( { model | state = Started newStartedModel }
-                    , focusNumeratorInput
-                    )
+        ( NewQuestion newQuestion time, Started startedModel ) ->
+            let
+                newStartedModel =
+                    { startedModel
+                        | question = newQuestion
+                        , questionStartTime = time
+                    }
+            in
+            ( { model | state = Started newStartedModel }
+            , focusNumeratorInput
+            )
 
-        FirstQuestion difficulty question time ->
-            case model.state of
-                Started _ ->
-                    ( model
-                    , Cmd.none
-                    )
+        ( UpdateNumeratorAnswer numeratorAnswer, Started startedModel ) ->
+            let
+                newStartedModel =
+                    { startedModel | numeratorAnswer = numeratorAnswer }
+            in
+            ( { model | state = Started newStartedModel }
+            , Cmd.none
+            )
 
-                MainMenu ->
-                    ( { model | state = Started <| startingModelAndQuestionAndTime difficulty question time }
-                    , focusNumeratorInput
-                    )
+        ( UpdateDenominatorAnswer denominatorAnswer, Started startedModel ) ->
+            let
+                newStartedModel =
+                    { startedModel | denominatorAnswer = denominatorAnswer }
+            in
+            ( { model | state = Started newStartedModel }
+            , Cmd.none
+            )
 
-        StartGame difficulty ->
-            case model.state of
-                Started _ ->
-                    ( model
-                    , Cmd.none
-                    )
-
-                MainMenu ->
-                    ( model
-                    , getQuestionAndTime
-                        difficulty
-                        (FirstQuestion difficulty)
-                    )
-
-        UpdateNumeratorAnswer numeratorAnswer ->
-            case model.state of
-                MainMenu ->
-                    ( model
-                    , Cmd.none
-                    )
-
-                Started startedModel ->
-                    let
-                        newStartedModel =
-                            { startedModel | numeratorAnswer = numeratorAnswer }
-                    in
-                    ( { model | state = Started newStartedModel }
-                    , Cmd.none
-                    )
-
-        UpdateDenominatorAnswer denominatorAnswer ->
-            case model.state of
-                MainMenu ->
-                    ( model
-                    , Cmd.none
-                    )
-
-                Started startedModel ->
-                    let
-                        newStartedModel =
-                            { startedModel | denominatorAnswer = denominatorAnswer }
-                    in
-                    ( { model | state = Started newStartedModel }
-                    , Cmd.none
-                    )
-
-        SubmitCalculationAnswer question ->
-            case model.state of
-                MainMenu ->
-                    ( model
-                    , Cmd.none
-                    )
-
-                Started startedModel ->
-                    let
-                        maybeFraction : Maybe Fraction
-                        maybeFraction =
-                            Maybe.map2
-                                Fraction.create
-                                (String.toInt startedModel.numeratorAnswer)
-                                (String.toInt startedModel.denominatorAnswer)
-                                |> Maybe.andThen identity
-                    in
-                    case maybeFraction of
-                        Just fraction ->
-                            if Fraction.equal question.answer fraction then
-                                let
-                                    questionHistory =
-                                        { question = startedModel.question
-                                        , submittedAnswer = Just fraction
-                                        }
-
-                                    newStartedModel =
-                                        { startedModel
-                                            | streak = increment startedModel.streak
-                                            , correct = increment startedModel.correct
-                                            , numeratorAnswer = ""
-                                            , denominatorAnswer = ""
-                                            , answerValidationFeedback = ""
-                                            , questionHistory = questionHistory :: startedModel.questionHistory
-                                        }
-                                in
-                                update
-                                    GetNewQuestion
-                                    { model | state = Started newStartedModel }
-
-                            else
-                                let
-                                    questionHistory =
-                                        { question = startedModel.question
-                                        , submittedAnswer = Just fraction
-                                        }
-
-                                    newStartedModel =
-                                        { startedModel
-                                            | streak = startingQuestionCounter
-                                            , incorrect = increment startedModel.incorrect
-                                            , numeratorAnswer = ""
-                                            , denominatorAnswer = ""
-                                            , answerValidationFeedback = ""
-                                            , questionHistory = questionHistory :: startedModel.questionHistory
-                                        }
-                                in
-                                update
-                                    GetNewQuestion
-                                    { model | state = Started newStartedModel }
-
-                        Nothing ->
-                            let
-                                newStartedModel =
-                                    { startedModel
-                                        | answerValidationFeedback = "Invalid Fraction input. Check your input and try again."
-                                    }
-                            in
-                            ( { model | state = Started newStartedModel }
-                            , Cmd.none
-                            )
-
-        BackToMainMenu ->
-            init
-
-        Tick newTime ->
-            case model.state of
-                MainMenu ->
-                    ( model
-                    , Cmd.none
-                    )
-
-                Started startedModel ->
-                    let
-                        timeAllowedPerQuestion =
-                            millisecondsPerQuestion startedModel.difficulty
-
-                        timeDifference =
-                            Time.posixToMillis newTime - Time.posixToMillis startedModel.questionStartTime
-
-                        timeRemaining =
-                            timeAllowedPerQuestion - timeDifference
-                    in
-                    if timeRemaining < 0 then
+        ( SubmitCalculationAnswer question, Started startedModel ) ->
+            let
+                maybeFraction : Maybe Fraction
+                maybeFraction =
+                    Maybe.map2
+                        Fraction.create
+                        (String.toInt startedModel.numeratorAnswer)
+                        (String.toInt startedModel.denominatorAnswer)
+                        |> Maybe.andThen identity
+            in
+            case maybeFraction of
+                Just fraction ->
+                    if Fraction.equal question.answer fraction then
                         let
                             questionHistory =
                                 { question = startedModel.question
-                                , submittedAnswer = Nothing
+                                , submittedAnswer = Just fraction
                                 }
 
                             newStartedModel =
                                 { startedModel
-                                    | streak = startingQuestionCounter
-                                    , incorrect = increment startedModel.incorrect
+                                    | streak = increment startedModel.streak
+                                    , correct = increment startedModel.correct
                                     , numeratorAnswer = ""
                                     , denominatorAnswer = ""
+                                    , answerValidationFeedback = ""
                                     , questionHistory = questionHistory :: startedModel.questionHistory
                                 }
                         in
@@ -395,43 +273,102 @@ update msg model =
 
                     else
                         let
-                            newStartedModel =
-                                { startedModel | questionElapsedTime = timeRemaining }
-                        in
-                        ( { model | state = Started newStartedModel }
-                        , Cmd.none
-                        )
+                            questionHistory =
+                                { question = startedModel.question
+                                , submittedAnswer = Just fraction
+                                }
 
-        AdjustTimeZone newTimeZone ->
+                            newStartedModel =
+                                { startedModel
+                                    | streak = startingQuestionCounter
+                                    , incorrect = increment startedModel.incorrect
+                                    , numeratorAnswer = ""
+                                    , denominatorAnswer = ""
+                                    , answerValidationFeedback = ""
+                                    , questionHistory = questionHistory :: startedModel.questionHistory
+                                }
+                        in
+                        update
+                            GetNewQuestion
+                            { model | state = Started newStartedModel }
+
+                Nothing ->
+                    let
+                        newStartedModel =
+                            { startedModel
+                                | answerValidationFeedback = "Invalid fraction input. Check your input and try again."
+                            }
+                    in
+                    ( { model | state = Started newStartedModel }
+                    , Cmd.none
+                    )
+
+        ( BackToMainMenu, Started _ ) ->
+            init
+
+        ( Tick newTime, Started startedModel ) ->
+            let
+                timeAllowedPerQuestion =
+                    millisecondsPerQuestion startedModel.difficulty
+
+                timeDifference =
+                    Time.posixToMillis newTime - Time.posixToMillis startedModel.questionStartTime
+
+                timeRemaining =
+                    timeAllowedPerQuestion - timeDifference
+            in
+            if timeRemaining < 0 then
+                let
+                    questionHistory =
+                        { question = startedModel.question
+                        , submittedAnswer = Nothing
+                        }
+
+                    newStartedModel =
+                        { startedModel
+                            | streak = startingQuestionCounter
+                            , incorrect = increment startedModel.incorrect
+                            , numeratorAnswer = ""
+                            , denominatorAnswer = ""
+                            , questionHistory = questionHistory :: startedModel.questionHistory
+                        }
+                in
+                update
+                    GetNewQuestion
+                    { model | state = Started newStartedModel }
+
+            else
+                let
+                    newStartedModel =
+                        { startedModel | questionElapsedTime = timeRemaining }
+                in
+                ( { model | state = Started newStartedModel }
+                , Cmd.none
+                )
+
+        ( AdjustTimeZone newTimeZone, _ ) ->
             ( { model | zone = newTimeZone }
             , Cmd.none
             )
 
-        HandleKeyboardEvent key ->
-            case model.state of
-                MainMenu ->
-                    ( model
-                    , Cmd.none
-                    )
+        ( HandleKeyboardEvent key, Started startedModel ) ->
+            if key == "Enter" then
+                update
+                    (SubmitCalculationAnswer startedModel.question)
+                    model
 
-                Started startedModel ->
-                    if key == "Enter" then
-                        update
-                            (SubmitCalculationAnswer startedModel.question)
-                            model
+            else
+                ( model
+                , Cmd.none
+                )
 
-                    else
-                        ( model
-                        , Cmd.none
-                        )
-
-        NoOp ->
+        ( _, _ ) ->
             ( model
             , Cmd.none
             )
 
 
-getQuestionAndTime : Difficulty -> (Question -> Time.Posix -> Msg) -> Cmd Msg
+getQuestionAndTime : Difficulty -> (Question -> Posix -> Msg) -> Cmd Msg
 getQuestionAndTime difficulty f =
     Task.perform identity
         (Task.map2
