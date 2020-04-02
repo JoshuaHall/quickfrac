@@ -7,3 +7,5 @@ elm.js
 elm.min.js
 # Visual Studio Code files
 .vscode/
+
+dist/

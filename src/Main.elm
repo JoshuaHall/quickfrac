@@ -70,13 +70,13 @@ type alias StartedModel =
     , numeratorAnswer : String
     , denominatorAnswer : String
     , answerValidationFeedback : String
-    , questionHistory : List QuestionHistory
+    , questionHistory : List QuestionResult
     , questionStartTime : Posix
     , questionElapsedTime : Int
     }
 
 
-type alias QuestionHistory =
+type alias QuestionResult =
     { question : Question
     , submittedAnswer : Maybe Fraction
     }
@@ -417,7 +417,7 @@ view model =
         )
 
 
-questionHistoryView : List QuestionHistory -> Element msg
+questionHistoryView : List QuestionResult -> Element msg
 questionHistoryView questions =
     Keyed.column
         [ Element.scrollbarY
@@ -431,7 +431,7 @@ questionHistoryView questions =
         )
 
 
-questionHistoryIndividualView : Int -> QuestionHistory -> ( String, Element msg )
+questionHistoryIndividualView : Int -> QuestionResult -> ( String, Element msg )
 questionHistoryIndividualView number history =
     let
         fraction1 =
