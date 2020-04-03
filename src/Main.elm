@@ -895,7 +895,7 @@ generatorToTask generator =
         |> Task.map (Tuple.first << Random.step generator << Random.initialSeed << Time.posixToMillis)
 
 
-{-| The same as `List.indexedMap`, except that the indexes are reversed and incremented by one.
+{-| The same as `List.indexedMap`, except that the indexes are reversed and start at one instead of zero.
 -}
 reversedIndexesIndexedMapPlusOne : (Int -> a -> b) -> List a -> List b
 reversedIndexesIndexedMapPlusOne f xs =
