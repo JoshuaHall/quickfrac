@@ -1,18 +1,27 @@
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta http-equiv="X-UA-Compatible" content="ie=edge" />
-        <title>quickfrac</title>
-        <script src="dist/elm.min.js"></script>
-    </head>
-    <body>
-        <div id="elm"></div>
-        <script>
-            const app = Elm.Main.init({
-                node: document.getElementById("elm")
-            });
-        </script>
-    </body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="X-UA-Compatible" content="ie=edge" />
+    <title>quickfrac</title>
+  </head>
+  <body>
+    <div id="elm"></div>
+    <script src="node_modules/elm-canvas/elm-canvas.js"></script>
+    <script src="dist/elm.min.js"></script>
+    <script>
+      const app = Elm.Main.init({
+        node: document.getElementById("elm"),
+      });
+
+      app.ports.clearCanvas.subscribe(() => {
+        let scratchpad = document.querySelector("canvas");
+
+        let scratchpadContext = scratchpad.getContext("2d");
+
+        scratchpadContext.clearRect(0, 0, scratchpad.width, scratchpad.height);
+      });
+    </script>
+  </body>
 </html>

@@ -9,3 +9,5 @@ elm.min.js
 .vscode/
 
 dist/
+
+node_modules/

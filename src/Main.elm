@@ -1,12 +1,16 @@
 module Main exposing (main)
 
+import Array exposing (Array)
 import Browser
 import Browser.Dom as Dom
 import Browser.Events as Events
+import Canvas exposing (Point, Renderable, Shape, path, quadraticCurveTo, shapes)
+import Canvas.Settings exposing (stroke)
+import Canvas.Settings.Line exposing (LineCap(..), LineJoin(..), lineCap, lineJoin, lineWidth)
+import Color exposing (Color)
 import Element
     exposing
         ( Attribute
-        , Color
         , Element
         , centerX
         , centerY
@@ -31,7 +35,11 @@ import Element.Lazy exposing (lazy, lazy2, lazy3, lazy4)
 import Fraction exposing (Fraction)
 import Html exposing (Html)
 import Html.Attributes
+import Html.Events
+import Html.Events.Extra.Mouse as Mouse
+import Html.Events.Extra.Touch as Touch
 import Json.Decode as Decode
+import Ports
 import Random exposing (Generator)
 import Task exposing (Task)
 import Time exposing (Posix)
@@ -73,6 +81,17 @@ type alias StartedModel =
     , questionHistory : List QuestionResult
     , questionStartTime : Posix
     , questionElapsedTime : Int
+    , pending : Array Renderable
+    , toDraw : List Renderable
+    , drawingPointer : Maybe DrawingPointer
+    , color : Color
+    , size : Int
+    }
+
+
+type alias DrawingPointer =
+    { previousMidpoint : Point
+    , lastPoint : Point
     }
 
 
@@ -85,6 +104,16 @@ type alias QuestionResult =
 startingQuestionCounter : Int
 startingQuestionCounter =
     0
+
+
+canvasWidth : number
+canvasWidth =
+    750
+
+
+canvasHeight : number
+canvasHeight =
+    500
 
 
 startingModelAndQuestionAndTime : Difficulty -> Question -> Posix -> StartedModel
@@ -100,6 +129,11 @@ startingModelAndQuestionAndTime difficulty question time =
     , questionHistory = []
     , questionStartTime = time
     , questionElapsedTime = 0
+    , pending = Array.empty
+    , toDraw = []
+    , drawingPointer = Nothing
+    , color = Color.black
+    , size = 5
     }
 
 
@@ -139,6 +173,7 @@ subscriptions _ =
         , Decode.field "key" Decode.string
             |> Decode.map HandleKeyboardEvent
             |> Events.onKeyDown
+        , Events.onAnimationFrameDelta AnimationFrame
         ]
 
 
@@ -147,28 +182,32 @@ subscriptions _ =
 
 
 type Difficulty
-    = Easy
+    = Practice
+    | Easy
     | Intermediate
     | Hard
 
 
 {-| Time for each level of difficulty per fraction (in milliseconds).
 -}
-millisecondsPerQuestion : Difficulty -> Int
+millisecondsPerQuestion : Difficulty -> Maybe Int
 millisecondsPerQuestion difficulty =
     let
         secondsPerQuestion =
             case difficulty of
+                Practice ->
+                    Nothing
+
                 Easy ->
-                    30
+                    Just 45
 
                 Intermediate ->
-                    25
+                    Just 35
 
                 Hard ->
-                    20
+                    Just 25
     in
-    secondsPerQuestion * millisecondsPerSecond
+    Maybe.map ((*) millisecondsPerSecond) secondsPerQuestion
 
 
 type Msg
@@ -183,6 +222,11 @@ type Msg
     | Tick Posix
     | AdjustTimeZone Time.Zone
     | HandleKeyboardEvent String
+    | AnimationFrame Float
+    | StartAt ( Float, Float )
+    | MoveAt ( Float, Float )
+    | EndAt ( Float, Float )
+    | ClearCanvas
     | NoOp
 
 
@@ -203,9 +247,12 @@ update msg model =
 
         ( GetNewQuestion, Started startedModel ) ->
             ( model
-            , getQuestionAndTime
-                startedModel.difficulty
-                NewQuestion
+            , Cmd.batch
+                [ getQuestionAndTime
+                    startedModel.difficulty
+                    NewQuestion
+                , Ports.clearCanvas ()
+                ]
             )
 
         ( NewQuestion newQuestion time, Started startedModel ) ->
@@ -314,37 +361,44 @@ update msg model =
                 timeDifference =
                     Time.posixToMillis newTime - Time.posixToMillis startedModel.questionStartTime
 
-                timeRemaining =
-                    timeAllowedPerQuestion - timeDifference
+                maybeTimeRemaining =
+                    Maybe.map (\x -> x - timeDifference) timeAllowedPerQuestion
             in
-            if timeRemaining < 0 then
-                let
-                    questionHistory =
-                        { question = startedModel.question
-                        , submittedAnswer = Nothing
-                        }
+            case maybeTimeRemaining of
+                Just timeRemaining ->
+                    if timeRemaining < 0 then
+                        let
+                            questionHistory =
+                                { question = startedModel.question
+                                , submittedAnswer = Nothing
+                                }
 
-                    newStartedModel =
-                        { startedModel
-                            | streak = startingQuestionCounter
-                            , incorrect = increment startedModel.incorrect
-                            , numeratorAnswer = ""
-                            , denominatorAnswer = ""
-                            , questionHistory = questionHistory :: startedModel.questionHistory
-                        }
-                in
-                update
-                    GetNewQuestion
-                    { model | state = Started newStartedModel }
+                            newStartedModel =
+                                { startedModel
+                                    | streak = startingQuestionCounter
+                                    , incorrect = increment startedModel.incorrect
+                                    , numeratorAnswer = ""
+                                    , denominatorAnswer = ""
+                                    , questionHistory = questionHistory :: startedModel.questionHistory
+                                }
+                        in
+                        update
+                            GetNewQuestion
+                            { model | state = Started newStartedModel }
 
-            else
-                let
-                    newStartedModel =
-                        { startedModel | questionElapsedTime = timeRemaining }
-                in
-                ( { model | state = Started newStartedModel }
-                , Cmd.none
-                )
+                    else
+                        let
+                            newStartedModel =
+                                { startedModel | questionElapsedTime = timeRemaining }
+                        in
+                        ( { model | state = Started newStartedModel }
+                        , Cmd.none
+                        )
+
+                Nothing ->
+                    ( model
+                    , Cmd.none
+                    )
 
         ( AdjustTimeZone newTimeZone, _ ) ->
             ( { model | zone = newTimeZone }
@@ -362,10 +416,127 @@ update msg model =
                 , Cmd.none
                 )
 
+        ( AnimationFrame _, Started startedModel ) ->
+            let
+                newStartedModel =
+                    startedModel
+                        |> flushPendingToDraw
+            in
+            ( { model | state = Started newStartedModel }
+            , Cmd.none
+            )
+
+        ( StartAt point, Started startedModel ) ->
+            let
+                newStartedModel =
+                    initialPoint point startedModel
+            in
+            ( { model | state = Started newStartedModel }
+            , Cmd.none
+            )
+
+        ( MoveAt point, Started startedModel ) ->
+            let
+                newStartedModel =
+                    case startedModel.drawingPointer of
+                        Just pointer ->
+                            drawPoint point pointer startedModel
+
+                        Nothing ->
+                            startedModel
+            in
+            ( { model | state = Started newStartedModel }
+            , Cmd.none
+            )
+
+        ( EndAt point, Started startedModel ) ->
+            let
+                newStartedModel =
+                    case startedModel.drawingPointer of
+                        Just pointer ->
+                            finalPoint point pointer startedModel
+
+                        Nothing ->
+                            startedModel
+            in
+            ( { model | state = Started newStartedModel }
+            , Cmd.none
+            )
+
+        ( ClearCanvas, Started _ ) ->
+            ( model
+            , Ports.clearCanvas ()
+            )
+
         ( _, _ ) ->
             ( model
             , Cmd.none
             )
+
+
+flushPendingToDraw : StartedModel -> StartedModel
+flushPendingToDraw model =
+    { model
+        | pending = Array.empty
+        , toDraw = Array.toList model.pending
+    }
+
+
+initialPoint : ( Float, Float ) -> StartedModel -> StartedModel
+initialPoint ( x, y ) model =
+    let
+        newDrawingPointer =
+            Just <| DrawingPointer ( x, y ) ( x, y )
+    in
+    { model
+        | drawingPointer = newDrawingPointer
+    }
+
+
+drawPoint : Point -> DrawingPointer -> StartedModel -> StartedModel
+drawPoint newPoint { previousMidpoint, lastPoint } ({ pending } as model) =
+    let
+        newMidPoint =
+            controlPoint lastPoint newPoint
+    in
+    { model
+        | drawingPointer = Just { previousMidpoint = newMidPoint, lastPoint = newPoint }
+        , pending =
+            Array.push
+                (drawLine model
+                    [ path previousMidpoint [ quadraticCurveTo lastPoint newMidPoint ] ]
+                )
+                pending
+    }
+
+
+finalPoint : Point -> DrawingPointer -> StartedModel -> StartedModel
+finalPoint point { previousMidpoint, lastPoint } ({ pending } as model) =
+    { model
+        | drawingPointer = Nothing
+        , pending =
+            Array.push
+                (drawLine model
+                    [ path previousMidpoint [ quadraticCurveTo lastPoint point ] ]
+                )
+                pending
+    }
+
+
+controlPoint : Point -> Point -> Point
+controlPoint ( x1, y1 ) ( x2, y2 ) =
+    ( x1 + (x2 - x1) / 2, y1 + (y2 - y1) / 2 )
+
+
+drawLine : StartedModel -> List Shape -> Renderable
+drawLine { color, size } line =
+    line
+        |> shapes
+            [ lineCap RoundCap
+            , lineJoin RoundJoin
+            , lineWidth (toFloat size)
+            , stroke color
+            ]
 
 
 getQuestionAndTime : Difficulty -> (Question -> Posix -> Msg) -> Cmd Msg
@@ -405,16 +576,56 @@ view model =
                 row
                     [ centerX
                     , centerY
-                    , width (fill |> maximum 1260)
+                    , width (fill |> maximum 1600)
                     , height fill
+                    , padding 10
+                    , spacing 20
                     ]
-                    [ el
-                        [ width fill ]
-                        Element.none
+                    [ lazy scratchpadView gameModel
                     , lazy2 gameStartedView model.zone gameModel
                     , lazy questionHistoryView gameModel.questionHistory
                     ]
         )
+
+
+scratchpadView : StartedModel -> Element Msg
+scratchpadView model =
+    column
+        [ spacing 20 ]
+        [ el
+            [ Font.bold
+            , Font.center
+            , centerX
+            ]
+            (text "Scratchpad")
+        , el
+            [ Border.width 2
+            , Border.color black
+            ]
+            (Element.html <|
+                Canvas.toHtml
+                    ( canvasWidth, canvasHeight )
+                    [ Html.Attributes.style "touch-action" "none"
+                    , Mouse.onDown (.offsetPos >> StartAt)
+                    , Mouse.onMove (.offsetPos >> MoveAt)
+                    , Mouse.onUp (.offsetPos >> EndAt)
+                    , Mouse.onLeave (.offsetPos >> EndAt)
+                    , Mouse.onContextMenu (.offsetPos >> EndAt)
+                    , onTouch "touchstart" (touchCoordinates >> StartAt)
+                    , onTouch "touchmove" (touchCoordinates >> MoveAt)
+                    , onTouch "touchend" (touchCoordinates >> EndAt)
+                    ]
+                    model.toDraw
+            )
+        , Input.button
+            [ Background.color bootstrapDanger
+            , padding 10
+            , Border.rounded 4
+            ]
+            { onPress = Just ClearCanvas
+            , label = el [ Font.color white ] (text "Clear Scratchpad")
+            }
+        ]
 
 
 questionHistoryView : List QuestionResult -> Element msg
@@ -485,7 +696,7 @@ questionHistoryIndividualView number history =
             , right = 0
             , top = 0
             }
-        , Border.color elmGray
+        , Border.color black
         , Border.solid
         , spacing 10
         , padding 5
@@ -541,7 +752,8 @@ mainMenuView =
             , spacing 20
             , padding 10
             ]
-            [ setDifficultyButton Easy
+            [ setDifficultyButton Practice
+            , setDifficultyButton Easy
             , setDifficultyButton Intermediate
             , setDifficultyButton Hard
             ]
@@ -560,7 +772,8 @@ gameStartedView zone model =
             , width fill
             , padding 10
             ]
-            [ Input.button
+            [ lazy difficultyHeader model.difficulty
+            , Input.button
                 [ Background.color elmOrange
                 , padding 10
                 , Border.rounded 4
@@ -576,20 +789,40 @@ gameStartedView zone model =
                 }
             ]
         , lazy3 scoreTrackerView model.correct model.incorrect model.streak
-        , el
-            [ Font.alignLeft
-            , padding 10
-            ]
-            (model.questionElapsedTime
-                |> Time.millisToPosix
-                |> Time.Extra.posixToParts zone
-                |> posixPartsToString
-                |> String.padLeft 4 ' '
-                |> (++) "Time remaining: "
-                |> text
-            )
+        , case model.difficulty of
+            Practice ->
+                Element.none
+
+            _ ->
+                el
+                    [ Font.alignLeft
+                    , padding 10
+                    ]
+                    (model.questionElapsedTime
+                        |> Time.millisToPosix
+                        |> Time.Extra.posixToParts zone
+                        |> posixPartsToString
+                        |> String.padLeft 4 ' '
+                        |> (++) "Time remaining: "
+                        |> text
+                    )
         , lazy4 questionView model.question model.numeratorAnswer model.denominatorAnswer model.answerValidationFeedback
         ]
+
+
+difficultyHeader : Difficulty -> Element msg
+difficultyHeader difficulty =
+    el
+        [ Font.bold ]
+        (text
+            (case difficulty of
+                Practice ->
+                    "Practice Mode"
+
+                _ ->
+                    "Difficulty: " ++ difficultyToString difficulty
+            )
+        )
 
 
 posixPartsToString : Time.Extra.Parts -> String
@@ -709,7 +942,7 @@ questionView question numeratorAnswer denominatorAnswer answerValidationFeedback
             [ centerX
             , spacing 30
             , padding 30
-            , Border.color elmGray
+            , Border.color black
             , Border.width 2
             , Border.rounded 10
             , width (px 450)
@@ -804,6 +1037,9 @@ difficultyFractionBounds difficulty =
     let
         bound =
             case difficulty of
+                Practice ->
+                    5
+
                 Easy ->
                     5
 
@@ -932,6 +1168,9 @@ millisecondsPerSecond =
 difficultyToString : Difficulty -> String
 difficultyToString difficulty =
     case difficulty of
+        Practice ->
+            "Practice"
+
         Easy ->
             "Easy"
 
@@ -978,41 +1217,96 @@ fractionUnsafeDivision fraction1 fraction2 =
 -- COLOR HELPERS
 
 
-white : Color
+white : Element.Color
 white =
     Element.rgb 1 1 1
 
 
-black : Color
+black : Element.Color
 black =
     Element.rgb 0 0 0
 
 
-elmBlue : Color
+elmBlue : Element.Color
 elmBlue =
     Element.rgb255 96 181 204
 
 
-elmGreen : Color
+elmGreen : Element.Color
 elmGreen =
     Element.rgb255 127 209 59
 
 
-elmOrange : Color
+elmOrange : Element.Color
 elmOrange =
     Element.rgb255 240 173 0
 
 
-elmGray : Color
-elmGray =
-    Element.rgb255 90 99 120
-
-
-bootstrapGreen : Color
+bootstrapGreen : Element.Color
 bootstrapGreen =
     Element.rgb255 92 184 92
 
 
-bootstrapRed : Color
+bootstrapRed : Element.Color
 bootstrapRed =
     Element.rgb255 217 83 79
+
+
+bootstrapDanger : Element.Color
+bootstrapDanger =
+    Element.rgb255 220 53 69
+
+
+
+-- EVENT HELPERS
+
+
+touchCoordinates : { event : Touch.Event, targetOffset : ( Float, Float ) } -> ( Float, Float )
+touchCoordinates { event, targetOffset } =
+    List.head event.changedTouches
+        |> Maybe.map
+            (\touch ->
+                let
+                    ( x, y ) =
+                        touch.pagePos
+
+                    ( x2, y2 ) =
+                        targetOffset
+                in
+                ( x - x2, y - y2 )
+            )
+        |> Maybe.withDefault ( 0, 0 )
+
+
+onTouch : String -> ({ event : Touch.Event, targetOffset : Point } -> msg) -> Html.Attribute msg
+onTouch event tag =
+    eventDecoder
+        |> Decode.map
+            (\ev ->
+                { message = tag ev
+                , preventDefault = True
+                , stopPropagation = True
+                }
+            )
+        |> Html.Events.custom event
+
+
+eventDecoder : Decode.Decoder { event : Touch.Event, targetOffset : Point }
+eventDecoder =
+    Decode.map2
+        (\event offset ->
+            { event = event
+            , targetOffset = offset
+            }
+        )
+        Touch.eventDecoder
+        offsetDecoder
+
+
+offsetDecoder : Decode.Decoder Point
+offsetDecoder =
+    Decode.field "target"
+        (Decode.map2 (\top left -> ( left, top ))
+            (Decode.field "offsetTop" Decode.float)
+            (Decode.field "offsetLeft" Decode.float)
+        )
