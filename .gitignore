@@ -7,4 +7,3 @@ repl-temp-*
 .vscode/
 
 node_modules/
-!node_modules/elm-canvas/elm-canvas.js
