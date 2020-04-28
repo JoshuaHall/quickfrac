@@ -16,9 +16,9 @@
       });
 
       app.ports.clearCanvas.subscribe(() => {
-        let scratchpad = document.querySelector("canvas");
+        const scratchpad = document.querySelector("canvas");
 
-        let scratchpadContext = scratchpad.getContext("2d");
+        const scratchpadContext = scratchpad.getContext("2d");
 
         scratchpadContext.clearRect(0, 0, scratchpad.width, scratchpad.height);
       });
