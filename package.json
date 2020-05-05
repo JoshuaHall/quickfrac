@@ -1,4 +1,10 @@
 {
+  "version": "0.5",
+  "private": true,
+  "author": {
+    "email": "joshuahallmail@gmail.com",
+    "name": "Joshua Hall"
+  },
   "dependencies": {
     "elm-canvas": "^2.2.3"
   }
