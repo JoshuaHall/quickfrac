@@ -2,7 +2,7 @@
 # yarn lockfile v1
 
 
-elm-canvas@^2.2.3:
-  version "2.2.3"
-  resolved "https://registry.yarnpkg.com/elm-canvas/-/elm-canvas-2.2.3.tgz#0f763ef698262653c5e506caf2fa87baf410bfa8"
-  integrity sha512-xwbTvvYfOz0i4jEFpVIwJSahE09QYMTc/Q29LUoVHQB4msrfzU7rAUuaSia7F+zFsllTUIp62n4roIXmuiFy3Q==
+elm-canvas@^2.2.4:
+  version "2.2.4"
+  resolved "https://registry.yarnpkg.com/elm-canvas/-/elm-canvas-2.2.4.tgz#7204789ca5667efe56804302938e6894df8f6751"
+  integrity sha512-Kc2MD5CO161/+6WWfzmRB14v4D4RFTK9+7oWOCKVLIxNdud4YYvFIwfJS5PrhMGfiyqxK64ie2FDIcFGLVJdbw==
