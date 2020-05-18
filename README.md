@@ -6,13 +6,13 @@ A flashcard game to learn fractions written in Elm.
 
 ### Optional but highly recommended:
 
--   `elm-format src/ --yes`
--   `elm-analyse`
+- `elm-format src/ --yes`
+- `elm-analyse`
 
 ### Development:
 
--   `elm make src/Main.elm --optimize --output elm.js`
+- `elm make src/Main.elm --optimize --output elm.js`
 
 ### Production:
 
--   `./optimize.sh src/Main.elm`
+- `./optimize.sh src/Main.elm`
