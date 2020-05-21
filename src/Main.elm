@@ -8,37 +8,15 @@ import Canvas exposing (Point, Renderable, Shape, path, quadraticCurveTo, shapes
 import Canvas.Settings exposing (stroke)
 import Canvas.Settings.Line exposing (LineCap(..), LineJoin(..), lineCap, lineJoin, lineWidth)
 import Color exposing (Color)
-import Element
-    exposing
-        ( Attribute
-        , Element
-        , centerX
-        , centerY
-        , column
-        , el
-        , fill
-        , height
-        , maximum
-        , padding
-        , px
-        , row
-        , spacing
-        , text
-        , width
-        )
-import Element.Background as Background
-import Element.Border as Border
-import Element.Font as Font
-import Element.Input as Input
-import Element.Keyed as Keyed
-import Element.Lazy exposing (lazy, lazy2, lazy3, lazy4)
-import Fraction exposing (Fraction)
-import Html exposing (Html)
-import Html.Attributes
-import Html.Events
+import Fraction exposing (Fraction, FractionCreationError(..))
+import Html exposing (Html, button, div, h1, h3, input, label, p, strong, text)
+import Html.Attributes exposing (class, classList, id, style, type_, value)
+import Html.Events exposing (onClick, onInput)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
-import Json.Decode as Decode
+import Html.Keyed as Keyed
+import Html.Lazy exposing (lazy, lazy2, lazy3, lazy4)
+import Json.Decode as Decode exposing (Decoder)
 import Ports
 import Random exposing (Generator)
 import Task exposing (Task)
@@ -77,7 +55,7 @@ type alias StartedModel =
     , incorrect : Int
     , numeratorAnswer : String
     , denominatorAnswer : String
-    , answerValidationFeedback : String
+    , answerValidationFeedback : Maybe AnswerFeedback
     , questionHistory : List QuestionResult
     , questionStartTime : Posix
     , questionElapsedTime : Int
@@ -85,8 +63,14 @@ type alias StartedModel =
     , toDraw : List Renderable
     , drawingPointer : Maybe DrawingPointer
     , color : Color
-    , size : Int
+    , canvasLineSize : Int
     }
+
+
+type AnswerFeedback
+    = NumeratorFeedback String
+    | DenominatorFeedback String
+    | BothFeedback String String
 
 
 type alias DrawingPointer =
@@ -106,14 +90,23 @@ startingQuestionCounter =
     0
 
 
+startingNumeratorAndDenominatorAnswer : String
+startingNumeratorAndDenominatorAnswer =
+    ""
+
+
+{-| Canvas width in pixels.
+-}
 canvasWidth : number
 canvasWidth =
-    750
+    500
 
 
+{-| Canvas height in pixels.
+-}
 canvasHeight : number
 canvasHeight =
-    500
+    333
 
 
 startingModelAndQuestionAndTime : Difficulty -> Question -> Posix -> StartedModel
@@ -123,9 +116,9 @@ startingModelAndQuestionAndTime difficulty question time =
     , streak = startingQuestionCounter
     , correct = startingQuestionCounter
     , incorrect = startingQuestionCounter
-    , numeratorAnswer = ""
-    , denominatorAnswer = ""
-    , answerValidationFeedback = ""
+    , numeratorAnswer = startingNumeratorAndDenominatorAnswer
+    , denominatorAnswer = startingNumeratorAndDenominatorAnswer
+    , answerValidationFeedback = Nothing
     , questionHistory = []
     , questionStartTime = time
     , questionElapsedTime = 0
@@ -133,7 +126,7 @@ startingModelAndQuestionAndTime difficulty question time =
     , toDraw = []
     , drawingPointer = Nothing
     , color = Color.black
-    , size = 5
+    , canvasLineSize = 5
     }
 
 
@@ -167,14 +160,29 @@ init =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
-    Sub.batch
-        [ Time.every (millisecondsPerSecond / 30) Tick
-        , Decode.field "key" Decode.string
-            |> Decode.map HandleKeyboardEvent
-            |> Events.onKeyDown
-        , Events.onAnimationFrameDelta AnimationFrame
-        ]
+subscriptions model =
+    case model.state of
+        Started startedModel ->
+            case startedModel.difficulty of
+                Practice ->
+                    Sub.batch
+                        [ Decode.field "key" Decode.string
+                            |> Decode.map HandleKeyboardEvent
+                            |> Events.onKeyDown
+                        , Events.onAnimationFrameDelta AnimationFrame
+                        ]
+
+                _ ->
+                    Sub.batch
+                        [ Time.every (millisecondsPerSecond / 30) Tick
+                        , Decode.field "key" Decode.string
+                            |> Decode.map HandleKeyboardEvent
+                            |> Events.onKeyDown
+                        , Events.onAnimationFrameDelta AnimationFrame
+                        ]
+
+        MainMenu ->
+            Sub.none
 
 
 
@@ -192,22 +200,18 @@ type Difficulty
 -}
 millisecondsPerQuestion : Difficulty -> Maybe Int
 millisecondsPerQuestion difficulty =
-    let
-        secondsPerQuestion =
-            case difficulty of
-                Practice ->
-                    Nothing
+    case difficulty of
+        Practice ->
+            Nothing
 
-                Easy ->
-                    Just 45
+        Easy ->
+            Just 45000
 
-                Intermediate ->
-                    Just 35
+        Intermediate ->
+            Just 35000
 
-                Hard ->
-                    Just 25
-    in
-    Maybe.map ((*) millisecondsPerSecond) secondsPerQuestion
+        Hard ->
+            Just 25000
 
 
 type Msg
@@ -287,16 +291,11 @@ update msg model =
 
         ( SubmitCalculationAnswer question, Started startedModel ) ->
             let
-                maybeFraction : Maybe Fraction
-                maybeFraction =
-                    Maybe.map2
-                        Fraction.create
-                        (String.toInt startedModel.numeratorAnswer)
-                        (String.toInt startedModel.denominatorAnswer)
-                        |> Maybe.andThen identity
+                fractionResult =
+                    fractionFromAnswer (String.trim startedModel.numeratorAnswer) (String.trim startedModel.denominatorAnswer)
             in
-            case maybeFraction of
-                Just fraction ->
+            case fractionResult of
+                Ok fraction ->
                     if Fraction.equal question.answer fraction then
                         let
                             questionHistory =
@@ -308,9 +307,9 @@ update msg model =
                                 { startedModel
                                     | streak = increment startedModel.streak
                                     , correct = increment startedModel.correct
-                                    , numeratorAnswer = ""
-                                    , denominatorAnswer = ""
-                                    , answerValidationFeedback = ""
+                                    , numeratorAnswer = startingNumeratorAndDenominatorAnswer
+                                    , denominatorAnswer = startingNumeratorAndDenominatorAnswer
+                                    , answerValidationFeedback = Nothing
                                     , questionHistory = questionHistory :: startedModel.questionHistory
                                 }
                         in
@@ -329,9 +328,9 @@ update msg model =
                                 { startedModel
                                     | streak = startingQuestionCounter
                                     , incorrect = increment startedModel.incorrect
-                                    , numeratorAnswer = ""
-                                    , denominatorAnswer = ""
-                                    , answerValidationFeedback = ""
+                                    , numeratorAnswer = startingNumeratorAndDenominatorAnswer
+                                    , denominatorAnswer = startingNumeratorAndDenominatorAnswer
+                                    , answerValidationFeedback = Nothing
                                     , questionHistory = questionHistory :: startedModel.questionHistory
                                 }
                         in
@@ -339,11 +338,11 @@ update msg model =
                             GetNewQuestion
                             { model | state = Started newStartedModel }
 
-                Nothing ->
+                Err answerFeedback ->
                     let
                         newStartedModel =
                             { startedModel
-                                | answerValidationFeedback = "Invalid fraction input. Check your input and try again."
+                                | answerValidationFeedback = Just answerFeedback
                             }
                     in
                     ( { model | state = Started newStartedModel }
@@ -377,8 +376,8 @@ update msg model =
                                 { startedModel
                                     | streak = startingQuestionCounter
                                     , incorrect = increment startedModel.incorrect
-                                    , numeratorAnswer = ""
-                                    , denominatorAnswer = ""
+                                    , numeratorAnswer = startingNumeratorAndDenominatorAnswer
+                                    , denominatorAnswer = startingNumeratorAndDenominatorAnswer
                                     , questionHistory = questionHistory :: startedModel.questionHistory
                                 }
                         in
@@ -474,71 +473,6 @@ update msg model =
             )
 
 
-flushPendingToDraw : StartedModel -> StartedModel
-flushPendingToDraw model =
-    { model
-        | pending = Array.empty
-        , toDraw = Array.toList model.pending
-    }
-
-
-initialPoint : ( Float, Float ) -> StartedModel -> StartedModel
-initialPoint ( x, y ) model =
-    let
-        newDrawingPointer =
-            Just <| DrawingPointer ( x, y ) ( x, y )
-    in
-    { model
-        | drawingPointer = newDrawingPointer
-    }
-
-
-drawPoint : Point -> DrawingPointer -> StartedModel -> StartedModel
-drawPoint newPoint { previousMidpoint, lastPoint } ({ pending } as model) =
-    let
-        newMidPoint =
-            controlPoint lastPoint newPoint
-    in
-    { model
-        | drawingPointer = Just { previousMidpoint = newMidPoint, lastPoint = newPoint }
-        , pending =
-            Array.push
-                (drawLine model
-                    [ path previousMidpoint [ quadraticCurveTo lastPoint newMidPoint ] ]
-                )
-                pending
-    }
-
-
-finalPoint : Point -> DrawingPointer -> StartedModel -> StartedModel
-finalPoint point { previousMidpoint, lastPoint } ({ pending } as model) =
-    { model
-        | drawingPointer = Nothing
-        , pending =
-            Array.push
-                (drawLine model
-                    [ path previousMidpoint [ quadraticCurveTo lastPoint point ] ]
-                )
-                pending
-    }
-
-
-controlPoint : Point -> Point -> Point
-controlPoint ( x1, y1 ) ( x2, y2 ) =
-    ( x1 + (x2 - x1) / 2, y1 + (y2 - y1) / 2 )
-
-
-drawLine : StartedModel -> List Shape -> Renderable
-drawLine { color, size } line =
-    line
-        |> shapes
-            [ lineCap RoundCap
-            , lineJoin RoundJoin
-            , lineWidth (toFloat size)
-            , stroke color
-            ]
-
-
 getQuestionAndTime : Difficulty -> (Question -> Posix -> Msg) -> Cmd Msg
 getQuestionAndTime difficulty f =
     Task.perform identity
@@ -562,87 +496,77 @@ focusNumeratorInput =
 
 view : Model -> Html Msg
 view model =
-    Element.layout
-        [ centerX
-        , centerY
-        , width fill
-        , height fill
-        ]
+    div
+        [ class "container is-fluid" ]
         (case model.state of
             MainMenu ->
-                mainMenuView
+                [ h1
+                    [ class "title has-text-centered" ]
+                    [ text "quickfrac" ]
+                , div
+                    [ class "columns is-centered is-vcentered is-multiline" ]
+                    [ setDifficultyButton Practice
+                    , setDifficultyButton Easy
+                    , setDifficultyButton Intermediate
+                    , setDifficultyButton Hard
+                    ]
+                ]
 
             Started gameModel ->
-                row
-                    [ centerX
-                    , centerY
-                    , width (fill |> maximum 1600)
-                    , height fill
-                    , padding 10
-                    , spacing 20
+                [ button
+                    [ onClick BackToMainMenu
+                    , class "button is-warning"
                     ]
+                    [ text "Back to Main Menu" ]
+                , div
+                    [ class "columns" ]
                     [ lazy scratchpadView gameModel
                     , lazy2 gameStartedView model.zone gameModel
                     , lazy questionHistoryView gameModel.questionHistory
                     ]
+                ]
         )
 
 
-scratchpadView : StartedModel -> Element Msg
+scratchpadView : StartedModel -> Html Msg
 scratchpadView model =
-    column
-        [ spacing 20 ]
-        [ el
-            [ Font.bold
-            , Font.center
-            , centerX
+    div
+        [ class "column is-narrow is-hidden-mobile" ]
+        [ h3
+            [ class "title" ]
+            [ text "Scratchpad" ]
+        , div
+            [ class "scratchpad" ]
+            [ Canvas.toHtml
+                ( canvasWidth, canvasHeight )
+                [ style "touch-action" "none"
+                , Mouse.onDown (.offsetPos >> StartAt)
+                , Mouse.onMove (.offsetPos >> MoveAt)
+                , Mouse.onUp (.offsetPos >> EndAt)
+                , Mouse.onLeave (.offsetPos >> EndAt)
+                , Mouse.onContextMenu (.offsetPos >> EndAt)
+                , onTouch "touchstart" (touchCoordinates >> StartAt)
+                , onTouch "touchmove" (touchCoordinates >> MoveAt)
+                , onTouch "touchend" (touchCoordinates >> EndAt)
+                ]
+                model.toDraw
             ]
-            (text "Scratchpad")
-        , el
-            [ Border.width 2
-            , Border.color black
+        , button
+            [ class "button is-danger"
+            , onClick ClearCanvas
             ]
-            (Element.html <|
-                Canvas.toHtml
-                    ( canvasWidth, canvasHeight )
-                    [ Html.Attributes.style "touch-action" "none"
-                    , Mouse.onDown (.offsetPos >> StartAt)
-                    , Mouse.onMove (.offsetPos >> MoveAt)
-                    , Mouse.onUp (.offsetPos >> EndAt)
-                    , Mouse.onLeave (.offsetPos >> EndAt)
-                    , Mouse.onContextMenu (.offsetPos >> EndAt)
-                    , onTouch "touchstart" (touchCoordinates >> StartAt)
-                    , onTouch "touchmove" (touchCoordinates >> MoveAt)
-                    , onTouch "touchend" (touchCoordinates >> EndAt)
-                    ]
-                    model.toDraw
-            )
-        , Input.button
-            [ Background.color bootstrapDanger
-            , padding 10
-            , Border.rounded 4
-            ]
-            { onPress = Just ClearCanvas
-            , label = el [ Font.color white ] (text "Clear Scratchpad")
-            }
+            [ text "Clear Scratchpad" ]
         ]
 
 
-questionHistoryView : List QuestionResult -> Element msg
+questionHistoryView : List QuestionResult -> Html msg
 questionHistoryView questions =
-    Keyed.column
-        [ Element.scrollbarY
-        , padding 10
-        , spacing 10
-        , width (fill |> maximum 450)
-        , height (fill |> maximum 750)
-        ]
-        (questions
-            |> reversedIndexesIndexedMapPlusOne questionHistoryIndividualView
-        )
+    Keyed.node "div"
+        [ class "column is-narrow questionHistory" ]
+        (reversedIndexesIndexedMapPlusOne questionHistoryIndividualView questions)
 
 
-questionHistoryIndividualView : Int -> QuestionResult -> ( String, Element msg )
+questionHistoryIndividualView : Int -> QuestionResult -> ( String, Html msg )
 questionHistoryIndividualView number history =
     let
         fraction1 =
@@ -675,42 +599,33 @@ questionHistoryIndividualView number history =
 
         colorForAnswer =
             if correct then
-                bootstrapGreen
+                "has-text-success"
 
             else
-                bootstrapRed
-
-        borderWidth =
-            2
+                "has-text-danger"
 
         indexString =
-            number
-                |> String.fromInt
+            String.fromInt number
     in
     ( indexString
-    , row
-        [ centerY
-        , Border.widthEach
-            { bottom = borderWidth
-            , left = borderWidth
-            , right = 0
-            , top = 0
-            }
-        , Border.color black
-        , Border.solid
-        , spacing 10
-        , padding 5
-        ]
-        [ el
-            [ Font.bold ]
-            (text indexString)
-        , column
-            [ spacing 5 ]
-            [ (fraction1 ++ " " ++ mathOperation ++ " " ++ fraction2 ++ " = " ++ actualAnswer)
-                |> text
-            , el
-                [ Font.color colorForAnswer ]
-                (text submittedAnswer)
+    , div
+        [ class "columns is-mobile is-vcentered" ]
+        [ div
+            [ class "column is-narrow" ]
+            [ strong
+                []
+                [ text indexString ]
+            ]
+        , div
+            [ class "column is-narrow" ]
+            [ p
+                []
+                [ (fraction1 ++ " " ++ mathOperation ++ " " ++ fraction2 ++ " = " ++ actualAnswer)
+                    |> text
+                ]
+            , p
+                [ class colorForAnswer ]
+                [ text submittedAnswer ]
             ]
         ]
     )
@@ -728,101 +643,40 @@ fractionToSimpleString fraction =
     "(" ++ String.fromInt numerator ++ " / " ++ String.fromInt denominator ++ ")"
 
 
-mainMenuView : Element Msg
-mainMenuView =
-    column
-        [ centerX
-        , centerY
-        ]
-        [ row
-            [ centerX
-            , spacing 20
-            , padding 10
-            ]
-            [ el
-                [ Font.size 64
-                , Font.family
-                    [ Font.sansSerif
-                    ]
-                ]
-                (text "Quickfrac")
-            ]
-        , row
-            [ centerX
-            , spacing 20
-            , padding 10
-            ]
-            [ setDifficultyButton Practice
-            , setDifficultyButton Easy
-            , setDifficultyButton Intermediate
-            , setDifficultyButton Hard
-            ]
-        ]
-
-
-gameStartedView : Time.Zone -> StartedModel -> Element Msg
+gameStartedView : Time.Zone -> StartedModel -> Html Msg
 gameStartedView zone model =
-    column
-        [ centerX
-        , centerY
-        ]
-        [ row
-            [ centerX
-            , centerY
-            , width fill
-            , padding 10
-            ]
-            [ lazy difficultyHeader model.difficulty
-            , Input.button
-                [ Background.color elmOrange
-                , padding 10
-                , Border.rounded 4
-                , Element.alignRight
-                ]
-                { onPress = Just BackToMainMenu
-                , label =
-                    el
-                        [ centerX
-                        , Font.color white
-                        ]
-                        (text "Back to Main Menu")
-                }
-            ]
+    div
+        [ class "column is-narrow is-half-desktop" ]
+        [ lazy difficultyHeader model.difficulty
         , lazy3 scoreTrackerView model.correct model.incorrect model.streak
         , case model.difficulty of
             Practice ->
-                Element.none
+                emptyNode
 
             _ ->
-                el
-                    [ Font.alignLeft
-                    , padding 10
-                    ]
-                    (model.questionElapsedTime
+                p
+                    [ class "content" ]
+                    [ strong
+                        []
+                        [ text "Time remaining: " ]
+                    , model.questionElapsedTime
                         |> Time.millisToPosix
                         |> Time.Extra.posixToParts zone
                         |> posixPartsToString
-                        |> String.padLeft 4 ' '
-                        |> (++) "Time remaining: "
                         |> text
-                    )
+                    ]
         , lazy4 questionView model.question model.numeratorAnswer model.denominatorAnswer model.answerValidationFeedback
         ]
 
 
-difficultyHeader : Difficulty -> Element msg
+difficultyHeader : Difficulty -> Html msg
 difficultyHeader difficulty =
-    el
-        [ Font.bold ]
-        (text
-            (case difficulty of
-                Practice ->
-                    "Practice Mode"
-
-                _ ->
-                    "Difficulty: " ++ difficultyToString difficulty
-            )
-        )
+    h3
+        [ class "title" ]
+        [ difficulty
+            |> difficultyToString
+            |> text
+        ]
 
 
 posixPartsToString : Time.Extra.Parts -> String
@@ -834,89 +688,74 @@ posixPartsToString parts =
     String.fromInt parts.second ++ "." ++ String.fromInt centisecond
 
 
-scoreTrackerView : Int -> Int -> Int -> Element msg
+scoreTrackerView : Int -> Int -> Int -> Html msg
 scoreTrackerView correct incorrect streak =
-    row
-        [ centerX
-        , spacing 20
-        , padding 10
-        ]
-        [ questionCounter "Correct" correct
-        , questionCounter "Incorrect" incorrect
-        , questionCounter "Streak" streak
+    div
+        [ class "level is-mobile" ]
+        [ div
+            [ class "level-item" ]
+            [ questionCounter "Correct" correct ]
+        , div
+            [ class "level-item" ]
+            [ questionCounter "Incorrect" incorrect ]
+        , div
+            [ class "level-item" ]
+            [ questionCounter "Streak" streak ]
         ]
 
 
-questionCounter : String -> Int -> Element msg
+questionCounter : String -> Int -> Html msg
 questionCounter counterText count =
-    column
-        [ centerX
-        , Font.center
-        ]
-        [ el
-            [ Font.bold
-            , Font.center
-            ]
-            (text counterText)
-        , el
-            [ centerX ]
-            (count
+    div
+        [ class "has-text-centered" ]
+        [ strong
+            []
+            [ text counterText ]
+        , p
+            []
+            [ count
                 |> String.fromInt
                 |> text
-            )
+            ]
         ]
 
 
-setDifficultyButton : Difficulty -> Element Msg
+setDifficultyButton : Difficulty -> Html Msg
 setDifficultyButton difficulty =
-    Input.button
-        [ Background.color elmBlue
-        , padding 10
-        , Border.rounded 4
-        ]
-        { onPress =
-            difficulty
-                |> StartGame
-                |> Just
-        , label =
-            el
-                [ centerX
-                , Font.color white
+    div
+        [ class "column is-narrow has-text-centered is-full-mobile" ]
+        [ button
+            [ classList
+                [ ( "button", True )
+                , ( "difficultyButton", True )
+                , ( difficultyToButtonColor difficulty, True )
                 ]
-                (difficulty
-                    |> difficultyToString
-                    |> text
-                )
-        }
+            , onClick <| StartGame difficulty
+            ]
+            [ difficulty
+                |> difficultyToString
+                |> text
+            ]
+        ]
 
 
-fractionView : Attribute msg -> Fraction -> Element msg
-fractionView fontSize fraction =
+fractionView : Fraction -> Html msg
+fractionView fraction =
     let
         numeratorAndDenominatorView num =
-            el
-                [ width fill
-                , Font.center
-                , fontSize
-                ]
-                (num
+            p
+                [ class "has-text-weight-bold has-text-centered is-size-1" ]
+                [ num
                     |> String.fromInt
                     |> text
-                )
+                ]
     in
-    column
-        [ spacing 10
-        , centerX
-        ]
+    div
+        [ class "column is-narrow" ]
         [ fraction
             |> Fraction.getNumerator
             |> numeratorAndDenominatorView
-        , el
-            [ width fill
-            , height <| px 6
-            , Background.color black
-            ]
-            Element.none
+        , div [ class "fractionLine" ] []
         , fraction
             |> Fraction.getDenominator
             |> numeratorAndDenominatorView
@@ -928,81 +767,98 @@ numeratorInputId =
     "numerator-input"
 
 
-questionView : Question -> String -> String -> String -> Element Msg
-questionView question numeratorAnswer denominatorAnswer answerValidationFeedback =
-    let
-        fontSize =
-            Font.size 96
-    in
-    column
-        [ width fill
-        , centerX
-        ]
-        [ row
-            [ centerX
-            , spacing 30
-            , padding 30
-            , Border.color black
-            , Border.width 2
-            , Border.rounded 10
-            , width (px 450)
-            ]
-            [ fractionView fontSize question.fraction1
-            , el
-                [ fontSize
-                , centerX
-                ]
-                (question.mathOperation
-                    |> mathOperationToString
-                    |> text
-                )
-            , fractionView fontSize question.fraction2
-            ]
-        , column
-            [ spacing 20
-            , padding 20
-            , width fill
-            ]
-            [ Input.text
-                [ Element.htmlAttribute (Html.Attributes.id numeratorInputId)
-                ]
-                { onChange = UpdateNumeratorAnswer
-                , text = numeratorAnswer
-                , placeholder = Nothing
-                , label = Input.labelAbove [] (text "Numerator")
-                }
-            , Input.text
-                []
-                { onChange = UpdateDenominatorAnswer
-                , text = denominatorAnswer
-                , placeholder = Nothing
-                , label = Input.labelAbove [] (text "Denominator")
-                }
-            , if String.isEmpty answerValidationFeedback then
-                Element.none
+feedbackToHtml : String -> Html msg
+feedbackToHtml feedback =
+    p
+        [ class "help is-danger" ]
+        [ text feedback ]
 
-              else
-                el
-                    [ Font.color bootstrapRed ]
-                    (text answerValidationFeedback)
-            , Input.button
-                [ width fill
-                , Background.color elmGreen
-                , Border.rounded 4
-                , spacing 20
-                , padding 20
-                ]
-                { onPress =
-                    question
-                        |> SubmitCalculationAnswer
-                        |> Just
-                , label =
-                    el
-                        [ centerX
-                        , Font.color white
+
+questionView : Question -> String -> String -> Maybe AnswerFeedback -> Html Msg
+questionView question numeratorAnswer denominatorAnswer answerValidationFeedback =
+    div
+        []
+        [ div
+            [ class "columns is-centered" ]
+            [ div
+                [ class "column is-narrow" ]
+                [ div
+                    [ class "columns is-mobile is-centered is-vcentered" ]
+                    [ fractionView question.fraction1
+                    , div
+                        [ class "column is-narrow" ]
+                        [ strong
+                            [ class "is-size-1" ]
+                            [ question.mathOperation
+                                |> mathOperationToString
+                                |> text
+                            ]
                         ]
-                        (text "Submit")
-                }
+                    , fractionView question.fraction2
+                    ]
+                ]
+            ]
+        , div
+            [ class "field" ]
+            [ label
+                [ class "label" ]
+                [ text "Numerator" ]
+            , div
+                [ class "control" ]
+                [ input
+                    [ class "input is-medium"
+                    , type_ "text"
+                    , onInput UpdateNumeratorAnswer
+                    , value numeratorAnswer
+                    , id numeratorInputId
+                    ]
+                    []
+                , case answerValidationFeedback of
+                    Just (NumeratorFeedback feedback) ->
+                        feedbackToHtml feedback
+
+                    Just (BothFeedback feedback _) ->
+                        feedbackToHtml feedback
+
+                    _ ->
+                        emptyNode
+                ]
+            ]
+        , div
+            [ class "field" ]
+            [ label
+                [ class "label" ]
+                [ text "Denominator" ]
+            , div
+                [ class "control" ]
+                [ input
+                    [ class "input is-medium"
+                    , type_ "text"
+                    , onInput UpdateDenominatorAnswer
+                    , value denominatorAnswer
+                    ]
+                    []
+                , case answerValidationFeedback of
+                    Just (DenominatorFeedback feedback) ->
+                        feedbackToHtml feedback
+
+                    Just (BothFeedback _ feedback) ->
+                        feedbackToHtml feedback
+
+                    _ ->
+                        emptyNode
+                ]
+            ]
+        , div
+            [ class "field" ]
+            [ div
+                [ class "control is-expanded" ]
+                [ button
+                    [ onClick (SubmitCalculationAnswer question)
+                    , class "button is-success"
+                    ]
+                    [ text "Submit" ]
+                ]
             ]
         ]
 
@@ -1181,6 +1037,22 @@ difficultyToString difficulty =
             "Hard"
 
 
+difficultyToButtonColor : Difficulty -> String
+difficultyToButtonColor difficulty =
+    case difficulty of
+        Practice ->
+            "is-info"
+
+        Easy ->
+            "is-success"
+
+        Intermediate ->
+            "is-warning"
+
+        Hard ->
+            "is-danger"
+
+
 mathOperationToString : MathOperation -> String
 mathOperationToString mathOperation =
     case mathOperation of
@@ -1195,6 +1067,40 @@ mathOperationToString mathOperation =
 
         Divide ->
             "÷"
+
+
+fractionCreationErrorToAnswerFeedback : FractionCreationError -> AnswerFeedback
+fractionCreationErrorToAnswerFeedback error =
+    case error of
+        NumeratorError err ->
+            NumeratorFeedback err
+
+        DenominatorError err ->
+            DenominatorFeedback err
+
+
+fractionFromAnswer : String -> String -> Result AnswerFeedback Fraction
+fractionFromAnswer numeratorStr denominatorStr =
+    let
+        denominatorErr =
+            "Denominator is not an integer."
+
+        numeratorErr =
+            "Numerator is not an integer."
+    in
+    case ( String.toInt numeratorStr, String.toInt denominatorStr ) of
+        ( Just numerator, Just denominator ) ->
+            Fraction.createWithFeedback numerator denominator
+                |> Result.mapError fractionCreationErrorToAnswerFeedback
+
+        ( Just _, Nothing ) ->
+            Err <| DenominatorFeedback denominatorErr
+
+        ( Nothing, Just _ ) ->
+            Err <| NumeratorFeedback numeratorErr
+
+        ( Nothing, Nothing ) ->
+            Err <| BothFeedback numeratorErr denominatorErr
 
 
 
@@ -1214,51 +1120,16 @@ fractionUnsafeDivision fraction1 fraction2 =
 
 
 
--- COLOR HELPERS
+-- HTML HELPERS
 
 
-white : Element.Color
-white =
-    Element.rgb 1 1 1
-
-
-black : Element.Color
-black =
-    Element.rgb 0 0 0
-
-
-elmBlue : Element.Color
-elmBlue =
-    Element.rgb255 96 181 204
-
-
-elmGreen : Element.Color
-elmGreen =
-    Element.rgb255 127 209 59
-
-
-elmOrange : Element.Color
-elmOrange =
-    Element.rgb255 240 173 0
-
-
-bootstrapGreen : Element.Color
-bootstrapGreen =
-    Element.rgb255 92 184 92
-
-
-bootstrapRed : Element.Color
-bootstrapRed =
-    Element.rgb255 217 83 79
-
-
-bootstrapDanger : Element.Color
-bootstrapDanger =
-    Element.rgb255 220 53 69
+emptyNode : Html msg
+emptyNode =
+    text ""
 
 
 
--- EVENT HELPERS
+-- CANVAS HELPERS
 
 
 touchCoordinates : { event : Touch.Event, targetOffset : ( Float, Float ) } -> ( Float, Float )
@@ -1291,7 +1162,7 @@ onTouch event tag =
         |> Html.Events.custom event
 
 
-eventDecoder : Decode.Decoder { event : Touch.Event, targetOffset : Point }
+eventDecoder : Decoder { event : Touch.Event, targetOffset : Point }
 eventDecoder =
     Decode.map2
         (\event offset ->
@@ -1303,10 +1174,75 @@ eventDecoder =
         offsetDecoder
 
 
-offsetDecoder : Decode.Decoder Point
+offsetDecoder : Decoder Point
 offsetDecoder =
     Decode.field "target"
         (Decode.map2 (\top left -> ( left, top ))
             (Decode.field "offsetTop" Decode.float)
             (Decode.field "offsetLeft" Decode.float)
         )
+
+
+flushPendingToDraw : StartedModel -> StartedModel
+flushPendingToDraw model =
+    { model
+        | pending = Array.empty
+        , toDraw = Array.toList model.pending
+    }
+
+
+initialPoint : ( Float, Float ) -> StartedModel -> StartedModel
+initialPoint ( x, y ) model =
+    let
+        newDrawingPointer =
+            Just <| DrawingPointer ( x, y ) ( x, y )
+    in
+    { model
+        | drawingPointer = newDrawingPointer
+    }
+
+
+drawPoint : Point -> DrawingPointer -> StartedModel -> StartedModel
+drawPoint newPoint { previousMidpoint, lastPoint } ({ pending } as model) =
+    let
+        newMidPoint =
+            controlPoint lastPoint newPoint
+    in
+    { model
+        | drawingPointer = Just { previousMidpoint = newMidPoint, lastPoint = newPoint }
+        , pending =
+            Array.push
+                (drawLine model
+                    [ path previousMidpoint [ quadraticCurveTo lastPoint newMidPoint ] ]
+                )
+                pending
+    }
+
+
+finalPoint : Point -> DrawingPointer -> StartedModel -> StartedModel
+finalPoint point { previousMidpoint, lastPoint } ({ pending } as model) =
+    { model
+        | drawingPointer = Nothing
+        , pending =
+            Array.push
+                (drawLine model
+                    [ path previousMidpoint [ quadraticCurveTo lastPoint point ] ]
+                )
+                pending
+    }
+
+
+controlPoint : Point -> Point -> Point
+controlPoint ( x1, y1 ) ( x2, y2 ) =
+    ( x1 + (x2 - x1) / 2, y1 + (y2 - y1) / 2 )
+
+
+drawLine : StartedModel -> List Shape -> Renderable
+drawLine { color, canvasLineSize } line =
+    line
+        |> shapes
+            [ lineCap RoundCap
+            , lineJoin RoundJoin
+            , lineWidth (toFloat canvasLineSize)
+            , stroke color
+            ]

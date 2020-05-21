@@ -7,6 +7,7 @@
     "name": "Joshua Hall"
   },
   "dependencies": {
+    "bulma": "^0.8.2",
     "elm-canvas": "^2.2.4"
   }
 }
