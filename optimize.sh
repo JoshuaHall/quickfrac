@@ -9,7 +9,7 @@ elm-format src/ --yes
 
 elm make --optimize --output=$js "$@"
 
-google-closure-compiler -O ADVANCED -W quiet $js --js_output_file $min
+npx google-closure-compiler -O ADVANCED -W quiet $js --js_output_file $min
 
 echo "Compiled size:$(wc $js -c) bytes  ($js)"
 echo "Minified size:$(wc $min -c) bytes  ($min)"
