@@ -1,3 +1,5 @@
+# TODO
+
 - Make the timers easier across the board
 
 - Add new "difficulty" setting called Learning/Tutorial/Training/Practice where there is:
