@@ -11,6 +11,6 @@
     "elm-canvas": "2.2.4"
   },
   "devDependencies": {
-    "google-closure-compiler": "20210302.0.0"
+    "google-closure-compiler": "20210808.0.0"
   }
 }
