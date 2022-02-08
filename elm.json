@@ -15,7 +15,7 @@
             "elm/random": "1.0.0",
             "elm/time": "1.0.0",
             "joakin/elm-canvas": "4.2.1",
-            "justinmimbs/time-extra": "1.1.0",
+            "justinmimbs/time-extra": "1.1.1",
             "mpizenberg/elm-pointer-events": "4.0.2"
         },
         "indirect": {
