@@ -7,7 +7,7 @@ min="dist/elm.min.js"
 
 elm-format src/ --yes
 
-elm make --optimize --output=$js "$@"
+elm make --optimize --output=$js src/Main.elm
 
 npx google-closure-compiler -O ADVANCED -W quiet $js --js_output_file $min
 

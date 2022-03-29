@@ -1,18 +1,13 @@
 # quickfrac
 
-A flashcard game to learn fractions written in Elm.
+A flashcard game to learn fractions. Written in Elm.
 
-## Build instructions:
+## Build instructions
 
-### Optional but highly recommended:
-
-- `elm-format src/ --yes`
-- `elm-analyse`
-
-### Development:
+### Development
 
 - `elm make src/Main.elm --optimize --output elm.js`
 
-### Production:
+### Production
 
-- `./optimize.sh src/Main.elm`
+- `./optimize.sh`
