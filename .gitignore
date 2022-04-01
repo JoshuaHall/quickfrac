@@ -1,9 +1,5 @@
-# elm-package generated files
 elm-stuff
-# elm-repl generated files
 repl-temp-*
-
-# Visual Studio Code files
 .vscode/
-
 node_modules/
+.pnpm-debug.log
