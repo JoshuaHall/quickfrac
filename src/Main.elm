@@ -10,13 +10,14 @@ import Canvas.Settings.Line exposing (LineCap(..), LineJoin(..), lineCap, lineJo
 import Color exposing (Color)
 import Fraction exposing (Fraction, FractionCreationError(..))
 import Html exposing (Html, button, div, h1, h3, input, label, p, strong, text)
-import Html.Attributes exposing (class, classList, id, style, type_, value)
+import Html.Attributes exposing (class, id, style, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Html.Events.Extra.Mouse as Mouse
 import Html.Events.Extra.Touch as Touch
 import Html.Keyed as Keyed
 import Html.Lazy exposing (lazy, lazy2, lazy3, lazy4)
 import Json.Decode as Decode exposing (Decoder)
+import List.Extra exposing (reverseRange)
 import Ports
 import Random exposing (Generator)
 import Task exposing (Task)
@@ -163,13 +164,17 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     case model.state of
         Started startedModel ->
+            let
+                createAnimationFrameEvent =
+                    always AnimationFrame
+            in
             case startedModel.difficulty of
                 Practice ->
                     Sub.batch
                         [ Decode.field "key" Decode.string
                             |> Decode.map HandleKeyboardEvent
                             |> Events.onKeyDown
-                        , Events.onAnimationFrameDelta AnimationFrame
+                        , Events.onAnimationFrameDelta createAnimationFrameEvent
                         ]
 
                 _ ->
@@ -178,7 +183,7 @@ subscriptions model =
                         , Decode.field "key" Decode.string
                             |> Decode.map HandleKeyboardEvent
                             |> Events.onKeyDown
-                        , Events.onAnimationFrameDelta AnimationFrame
+                        , Events.onAnimationFrameDelta createAnimationFrameEvent
                         ]
 
         MainMenu ->
@@ -205,10 +210,10 @@ millisecondsPerQuestion difficulty =
             Nothing
 
         Easy ->
-            Just 45000
+            Just 55000
 
         Intermediate ->
-            Just 35000
+            Just 40000
 
         Hard ->
             Just 25000
@@ -226,7 +231,7 @@ type Msg
     | Tick Posix
     | AdjustTimeZone Time.Zone
     | HandleKeyboardEvent String
-    | AnimationFrame Float
+    | AnimationFrame
     | StartAt ( Float, Float )
     | MoveAt ( Float, Float )
     | EndAt ( Float, Float )
@@ -357,11 +362,16 @@ update msg model =
                 timeAllowedPerQuestion =
                     millisecondsPerQuestion startedModel.difficulty
 
-                timeDifference =
-                    Time.posixToMillis newTime - Time.posixToMillis startedModel.questionStartTime
-
                 maybeTimeRemaining =
-                    Maybe.map (\x -> x - timeDifference) timeAllowedPerQuestion
+                    Maybe.map
+                        (\x ->
+                            let
+                                timeDifference =
+                                    Time.posixToMillis newTime - Time.posixToMillis startedModel.questionStartTime
+                            in
+                            x - timeDifference
+                        )
+                        timeAllowedPerQuestion
             in
             case maybeTimeRemaining of
                 Just timeRemaining ->
@@ -415,7 +425,7 @@ update msg model =
                 , Cmd.none
                 )
 
-        ( AnimationFrame _, Started startedModel ) ->
+        ( AnimationFrame, Started startedModel ) ->
             let
                 newStartedModel =
                     startedModel
@@ -467,7 +477,7 @@ update msg model =
             , Ports.clearCanvas ()
             )
 
-        ( _, _ ) ->
+        _ ->
             ( model
             , Cmd.none
             )
@@ -540,6 +550,7 @@ scratchpadView model =
             [ Canvas.toHtml
                 ( canvasWidth, canvasHeight )
                 [ style "touch-action" "none"
+                , class "quickfracCanvas"
                 , Mouse.onDown (.offsetPos >> StartAt)
                 , Mouse.onMove (.offsetPos >> MoveAt)
                 , Mouse.onUp (.offsetPos >> EndAt)
@@ -725,11 +736,7 @@ setDifficultyButton difficulty =
     div
         [ class "column is-narrow has-text-centered is-full-mobile" ]
         [ button
-            [ classList
-                [ ( "button", True )
-                , ( "difficultyButton", True )
-                , ( difficultyToButtonColor difficulty, True )
-                ]
+            [ class <| "button difficultyButton " ++ difficultyToButtonColor difficulty
             , onClick <| StartGame difficulty
             ]
             [ difficulty
@@ -992,20 +999,6 @@ generatorToTask generator =
 reversedIndexesIndexedMapPlusOne : (Int -> a -> b) -> List a -> List b
 reversedIndexesIndexedMapPlusOne f xs =
     List.map2 f (reverseRange (List.length xs) 1) xs
-
-
-reverseRange : Int -> Int -> List Int
-reverseRange =
-    reverseRangeHelp []
-
-
-reverseRangeHelp : List Int -> Int -> Int -> List Int
-reverseRangeHelp list hi lo =
-    if hi >= lo then
-        reverseRangeHelp (lo :: list) hi (increment lo)
-
-    else
-        list
 
 
 

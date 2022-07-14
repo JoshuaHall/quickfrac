@@ -784,11 +784,11 @@ function _Debug_crash_UNUSED(identifier, fact1, fact2, fact3, fact4)
 
 function _Debug_regionToString(region)
 {
-	if (region.aE.T === region.aO.T)
+	if (region.aF.T === region.aQ.T)
 	{
-		return 'on line ' + region.aE.T;
+		return 'on line ' + region.aF.T;
 	}
-	return 'on lines ' + region.aE.T + ' through ' + region.aO.T;
+	return 'on lines ' + region.aF.T + ' through ' + region.aQ.T;
 }
 
 
@@ -1857,9 +1857,9 @@ var _Platform_worker = F4(function(impl, flagDecoder, debugMetadata, args)
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bZ,
-		impl.cv,
-		impl.cp,
+		impl.b$,
+		impl.cx,
+		impl.cr,
 		function() { return function() {} }
 	);
 });
@@ -2618,16 +2618,33 @@ var _VirtualDom_attributeNS = F3(function(namespace, key, value)
 
 
 // XSS ATTACK VECTOR CHECKS
+//
+// For some reason, tabs can appear in href protocols and it still works.
+// So '\tjava\tSCRIPT:alert("!!!")' and 'javascript:alert("!!!")' are the same
+// in practice. That is why _VirtualDom_RE_js and _VirtualDom_RE_js_html look
+// so freaky.
+//
+// Pulling the regular expressions out to the top level gives a slight speed
+// boost in small benchmarks (4-10%) but hoisting values to reduce allocation
+// can be unpredictable in large programs where JIT may have a harder time with
+// functions are not fully self-contained. The benefit is more that the js and
+// js_html ones are so weird that I prefer to see them near each other.
+
+
+var _VirtualDom_RE_script = /^script$/i;
+var _VirtualDom_RE_on_formAction = /^(on|formAction$)/i;
+var _VirtualDom_RE_js = /^\s*j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:/i;
+var _VirtualDom_RE_js_html = /^\s*(j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:|d\s*a\s*t\s*a\s*:\s*t\s*e\s*x\s*t\s*\/\s*h\s*t\s*m\s*l\s*(,|;))/i;
 
 
 function _VirtualDom_noScript(tag)
 {
-	return tag == 'script' ? 'p' : tag;
+	return _VirtualDom_RE_script.test(tag) ? 'p' : tag;
 }
 
 function _VirtualDom_noOnOrFormAction(key)
 {
-	return /^(on|formAction$)/i.test(key) ? 'data-' + key : key;
+	return _VirtualDom_RE_on_formAction.test(key) ? 'data-' + key : key;
 }
 
 function _VirtualDom_noInnerHtmlOrFormAction(key)
@@ -2637,26 +2654,24 @@ function _VirtualDom_noInnerHtmlOrFormAction(key)
 
 function _VirtualDom_noJavaScriptUri(value)
 {
-	return /^javascript:/i.test(value.replace(/\s/g,'')) ? '' : value;
-}
-
-function _VirtualDom_noJavaScriptUri_UNUSED(value)
-{
-	return /^javascript:/i.test(value.replace(/\s/g,''))
-		? 'javascript:alert("This is an XSS vector. Please use ports or web components instead.")'
+	return _VirtualDom_RE_js.test(value)
+		? /**/''//*//**_UNUSED/'javascript:alert("This is an XSS vector. Please use ports or web components instead.")'//*/
 		: value;
 }
 
 function _VirtualDom_noJavaScriptOrHtmlUri(value)
 {
-	return /^\s*(javascript:|data:text\/html)/i.test(value) ? '' : value;
+	return _VirtualDom_RE_js_html.test(value)
+		? /**/''//*//**_UNUSED/'javascript:alert("This is an XSS vector. Please use ports or web components instead.")'//*/
+		: value;
 }
 
-function _VirtualDom_noJavaScriptOrHtmlUri_UNUSED(value)
+function _VirtualDom_noJavaScriptOrHtmlJson(value)
 {
-	return /^\s*(javascript:|data:text\/html)/i.test(value)
-		? 'javascript:alert("This is an XSS vector. Please use ports or web components instead.")'
-		: value;
+	return (typeof _Json_unwrap(value) === 'string' && _VirtualDom_RE_js_html.test(_Json_unwrap(value)))
+		? _Json_wrap(
+			/**/''//*//**_UNUSED/'javascript:alert("This is an XSS vector. Please use ports or web components instead.")'//*/
+		) : value;
 }
 
 
@@ -2704,9 +2719,9 @@ var _VirtualDom_mapEventTuple = F2(function(func, tuple)
 var _VirtualDom_mapEventRecord = F2(function(func, record)
 {
 	return {
-		b5: func(record.b5),
-		co: record.co,
-		ch: record.ch
+		b7: func(record.b7),
+		cq: record.cq,
+		cj: record.cj
 	}
 });
 
@@ -2974,11 +2989,11 @@ function _VirtualDom_makeCallback(eventNode, initialHandler)
 		// 3 = Custom
 
 		var value = result.a;
-		var message = !tag ? value : tag < 3 ? value.a : value.b5;
-		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.co;
+		var message = !tag ? value : tag < 3 ? value.a : value.b7;
+		var stopPropagation = tag == 1 ? value.b : tag == 3 && value.cq;
 		var currentEventNode = (
 			stopPropagation && event.stopPropagation(),
-			(tag == 2 ? value.b : tag == 3 && value.ch) && event.preventDefault(),
+			(tag == 2 ? value.b : tag == 3 && value.cj) && event.preventDefault(),
 			eventNode
 		);
 		var tagger;
@@ -3928,11 +3943,11 @@ var _Browser_element = _Debugger_element || F4(function(impl, flagDecoder, debug
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bZ,
-		impl.cv,
-		impl.cp,
+		impl.b$,
+		impl.cx,
+		impl.cr,
 		function(sendToApp, initialModel) {
-			var view = impl.cw;
+			var view = impl.cy;
 			/**/
 			var domNode = args['node'];
 			//*/
@@ -3964,12 +3979,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 	return _Platform_initialize(
 		flagDecoder,
 		args,
-		impl.bZ,
-		impl.cv,
-		impl.cp,
+		impl.b$,
+		impl.cx,
+		impl.cr,
 		function(sendToApp, initialModel) {
-			var divertHrefToApp = impl.aD && impl.aD(sendToApp)
-			var view = impl.cw;
+			var divertHrefToApp = impl.aE && impl.aE(sendToApp)
+			var view = impl.cy;
 			var title = _VirtualDom_doc.title;
 			var bodyNode = _VirtualDom_doc.body;
 			var currNode = _VirtualDom_virtualize(bodyNode);
@@ -3977,12 +3992,12 @@ var _Browser_document = _Debugger_document || F4(function(impl, flagDecoder, deb
 			{
 				_VirtualDom_divertHrefToApp = divertHrefToApp;
 				var doc = view(model);
-				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.bB);
+				var nextNode = _VirtualDom_node('body')(_List_Nil)(doc.bD);
 				var patches = _VirtualDom_diff(currNode, nextNode);
 				bodyNode = _VirtualDom_applyPatches(bodyNode, currNode, patches, sendToApp);
 				currNode = nextNode;
 				_VirtualDom_divertHrefToApp = 0;
-				(title !== doc.ct) && (_VirtualDom_doc.title = title = doc.ct);
+				(title !== doc.cv) && (_VirtualDom_doc.title = title = doc.cv);
 			});
 		}
 	);
@@ -4038,12 +4053,12 @@ function _Browser_makeAnimator(model, draw)
 
 function _Browser_application(impl)
 {
-	var onUrlChange = impl.b9;
-	var onUrlRequest = impl.ca;
+	var onUrlChange = impl.cb;
+	var onUrlRequest = impl.cc;
 	var key = function() { key.a(onUrlChange(_Browser_getUrl())); };
 
 	return _Browser_document({
-		aD: function(sendToApp)
+		aE: function(sendToApp)
 		{
 			key.a = sendToApp;
 			_Browser_window.addEventListener('popstate', key);
@@ -4059,9 +4074,9 @@ function _Browser_application(impl)
 					var next = $elm$url$Url$fromString(href).a;
 					sendToApp(onUrlRequest(
 						(next
-							&& curr.bd === next.bd
-							&& curr.aU === next.aU
-							&& curr.a9.a === next.a9.a
+							&& curr.bf === next.bf
+							&& curr.aW === next.aW
+							&& curr.bb.a === next.bb.a
 						)
 							? $elm$browser$Browser$Internal(next)
 							: $elm$browser$Browser$External(href)
@@ -4069,13 +4084,13 @@ function _Browser_application(impl)
 				}
 			});
 		},
-		bZ: function(flags)
+		b$: function(flags)
 		{
-			return A3(impl.bZ, flags, _Browser_getUrl(), key);
+			return A3(impl.b$, flags, _Browser_getUrl(), key);
 		},
-		cw: impl.cw,
-		cv: impl.cv,
-		cp: impl.cp
+		cy: impl.cy,
+		cx: impl.cx,
+		cr: impl.cr
 	});
 }
 
@@ -4141,17 +4156,17 @@ var _Browser_decodeEvent = F2(function(decoder, event)
 function _Browser_visibilityInfo()
 {
 	return (typeof _VirtualDom_doc.hidden !== 'undefined')
-		? { bW: 'hidden', bD: 'visibilitychange' }
+		? { bY: 'hidden', bF: 'visibilitychange' }
 		:
 	(typeof _VirtualDom_doc.mozHidden !== 'undefined')
-		? { bW: 'mozHidden', bD: 'mozvisibilitychange' }
+		? { bY: 'mozHidden', bF: 'mozvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.msHidden !== 'undefined')
-		? { bW: 'msHidden', bD: 'msvisibilitychange' }
+		? { bY: 'msHidden', bF: 'msvisibilitychange' }
 		:
 	(typeof _VirtualDom_doc.webkitHidden !== 'undefined')
-		? { bW: 'webkitHidden', bD: 'webkitvisibilitychange' }
-		: { bW: 'hidden', bD: 'visibilitychange' };
+		? { bY: 'webkitHidden', bF: 'webkitvisibilitychange' }
+		: { bY: 'hidden', bF: 'visibilitychange' };
 }
 
 
@@ -4232,12 +4247,12 @@ var _Browser_call = F2(function(functionName, id)
 function _Browser_getViewport()
 {
 	return {
-		bk: _Browser_getScene(),
-		bs: {
-			bw: _Browser_window.pageXOffset,
-			bx: _Browser_window.pageYOffset,
-			bv: _Browser_doc.documentElement.clientWidth,
-			aT: _Browser_doc.documentElement.clientHeight
+		bm: _Browser_getScene(),
+		bu: {
+			by: _Browser_window.pageXOffset,
+			bz: _Browser_window.pageYOffset,
+			bx: _Browser_doc.documentElement.clientWidth,
+			aV: _Browser_doc.documentElement.clientHeight
 		}
 	};
 }
@@ -4247,8 +4262,8 @@ function _Browser_getScene()
 	var body = _Browser_doc.body;
 	var elem = _Browser_doc.documentElement;
 	return {
-		bv: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
-		aT: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
+		bx: Math.max(body.scrollWidth, body.offsetWidth, elem.scrollWidth, elem.offsetWidth, elem.clientWidth),
+		aV: Math.max(body.scrollHeight, body.offsetHeight, elem.scrollHeight, elem.offsetHeight, elem.clientHeight)
 	};
 }
 
@@ -4271,15 +4286,15 @@ function _Browser_getViewportOf(id)
 	return _Browser_withNode(id, function(node)
 	{
 		return {
-			bk: {
-				bv: node.scrollWidth,
-				aT: node.scrollHeight
+			bm: {
+				bx: node.scrollWidth,
+				aV: node.scrollHeight
 			},
-			bs: {
-				bw: node.scrollLeft,
-				bx: node.scrollTop,
-				bv: node.clientWidth,
-				aT: node.clientHeight
+			bu: {
+				by: node.scrollLeft,
+				bz: node.scrollTop,
+				bx: node.clientWidth,
+				aV: node.clientHeight
 			}
 		};
 	});
@@ -4309,18 +4324,18 @@ function _Browser_getElement(id)
 		var x = _Browser_window.pageXOffset;
 		var y = _Browser_window.pageYOffset;
 		return {
-			bk: _Browser_getScene(),
-			bs: {
-				bw: x,
-				bx: y,
-				bv: _Browser_doc.documentElement.clientWidth,
-				aT: _Browser_doc.documentElement.clientHeight
+			bm: _Browser_getScene(),
+			bu: {
+				by: x,
+				bz: y,
+				bx: _Browser_doc.documentElement.clientWidth,
+				aV: _Browser_doc.documentElement.clientHeight
 			},
-			bQ: {
-				bw: x + rect.left,
-				bx: y + rect.top,
-				bv: rect.width,
-				aT: rect.height
+			bS: {
+				by: x + rect.left,
+				bz: y + rect.top,
+				bx: rect.width,
+				aV: rect.height
 			}
 		};
 	});
@@ -4942,7 +4957,7 @@ var $elm$url$Url$Http = 0;
 var $elm$url$Url$Https = 1;
 var $elm$url$Url$Url = F6(
 	function (protocol, host, port_, path, query, fragment) {
-		return {aS: fragment, aU: host, a6: path, a9: port_, bd: protocol, be: query};
+		return {aU: fragment, aW: host, a8: path, bb: port_, bf: protocol, bg: query};
 	});
 var $elm$core$String$contains = _String_contains;
 var $elm$core$String$length = _String_length;
@@ -5245,15 +5260,17 @@ var $author$project$Main$init = _Utils_Tuple2(
 var $author$project$Main$initWithFlags = function (_v0) {
 	return $author$project$Main$init;
 };
-var $author$project$Main$AnimationFrame = function (a) {
-	return {$: 11, a: a};
-};
+var $author$project$Main$AnimationFrame = {$: 11};
 var $author$project$Main$HandleKeyboardEvent = function (a) {
 	return {$: 10, a: a};
 };
 var $author$project$Main$Tick = function (a) {
 	return {$: 8, a: a};
 };
+var $elm$core$Basics$always = F2(
+	function (a, _v0) {
+		return a;
+	});
 var $elm$core$Platform$Sub$batch = _Platform_batch;
 var $elm$time$Time$Every = F2(
 	function (a, b) {
@@ -5261,7 +5278,7 @@ var $elm$time$Time$Every = F2(
 	});
 var $elm$time$Time$State = F2(
 	function (taggers, processes) {
-		return {bc: processes, bo: taggers};
+		return {be: processes, bq: taggers};
 	});
 var $elm$core$Dict$RBEmpty_elm_builtin = {$: -2};
 var $elm$core$Dict$empty = $elm$core$Dict$RBEmpty_elm_builtin;
@@ -5542,7 +5559,7 @@ var $elm$time$Time$spawnHelp = F3(
 	});
 var $elm$time$Time$onEffects = F3(
 	function (router, subs, _v0) {
-		var processes = _v0.bc;
+		var processes = _v0.be;
 		var rightStep = F3(
 			function (_v6, id, _v7) {
 				var spawns = _v7.a;
@@ -5611,7 +5628,7 @@ var $elm$time$Time$millisToPosix = $elm$core$Basics$identity;
 var $elm$time$Time$now = _Time_now($elm$time$Time$millisToPosix);
 var $elm$time$Time$onSelfMsg = F3(
 	function (router, interval, state) {
-		var _v0 = A2($elm$core$Dict$get, interval, state.bo);
+		var _v0 = A2($elm$core$Dict$get, interval, state.bq);
 		if (_v0.$ === 1) {
 			return $elm$core$Task$succeed(state);
 		} else {
@@ -5665,7 +5682,7 @@ var $elm$browser$Browser$AnimationManager$Delta = function (a) {
 };
 var $elm$browser$Browser$AnimationManager$State = F3(
 	function (subs, request, oldTime) {
-		return {aA: oldTime, bg: request, bn: subs};
+		return {aB: oldTime, bi: request, bp: subs};
 	});
 var $elm$browser$Browser$AnimationManager$init = $elm$core$Task$succeed(
 	A3($elm$browser$Browser$AnimationManager$State, _List_Nil, $elm$core$Maybe$Nothing, 0));
@@ -5673,8 +5690,8 @@ var $elm$browser$Browser$AnimationManager$now = _Browser_now(0);
 var $elm$browser$Browser$AnimationManager$rAF = _Browser_rAF(0);
 var $elm$browser$Browser$AnimationManager$onEffects = F3(
 	function (router, subs, _v0) {
-		var request = _v0.bg;
-		var oldTime = _v0.aA;
+		var request = _v0.bi;
+		var oldTime = _v0.aB;
 		var _v1 = _Utils_Tuple2(request, subs);
 		if (_v1.a.$ === 1) {
 			if (!_v1.b.b) {
@@ -5720,8 +5737,8 @@ var $elm$browser$Browser$AnimationManager$onEffects = F3(
 	});
 var $elm$browser$Browser$AnimationManager$onSelfMsg = F3(
 	function (router, newTime, _v0) {
-		var subs = _v0.bn;
-		var oldTime = _v0.aA;
+		var subs = _v0.bp;
+		var oldTime = _v0.aB;
 		var send = function (sub) {
 			if (!sub.$) {
 				var tagger = sub.a;
@@ -5789,7 +5806,7 @@ var $elm$browser$Browser$Events$MySub = F3(
 	});
 var $elm$browser$Browser$Events$State = F2(
 	function (subs, pids) {
-		return {a7: pids, bn: subs};
+		return {a9: pids, bp: subs};
 	});
 var $elm$browser$Browser$Events$init = $elm$core$Task$succeed(
 	A2($elm$browser$Browser$Events$State, _List_Nil, $elm$core$Dict$empty));
@@ -5823,7 +5840,7 @@ var $elm$core$Dict$fromList = function (assocs) {
 };
 var $elm$browser$Browser$Events$Event = F2(
 	function (key, event) {
-		return {aP: event, aZ: key};
+		return {aR: event, a$: key};
 	});
 var $elm$browser$Browser$Events$spawn = F3(
 	function (router, key, _v0) {
@@ -5897,7 +5914,7 @@ var $elm$browser$Browser$Events$onEffects = F3(
 			stepLeft,
 			stepBoth,
 			stepRight,
-			state.a7,
+			state.a9,
 			$elm$core$Dict$fromList(newSubs),
 			_Utils_Tuple3(_List_Nil, $elm$core$Dict$empty, _List_Nil));
 		var deadPids = _v0.a;
@@ -5943,8 +5960,8 @@ var $elm$core$List$filterMap = F2(
 	});
 var $elm$browser$Browser$Events$onSelfMsg = F3(
 	function (router, _v0, state) {
-		var key = _v0.aZ;
-		var event = _v0.aP;
+		var key = _v0.a$;
+		var event = _v0.aR;
 		var toMessage = function (_v2) {
 			var subKey = _v2.a;
 			var _v3 = _v2.b;
@@ -5953,7 +5970,7 @@ var $elm$browser$Browser$Events$onSelfMsg = F3(
 			var decoder = _v3.c;
 			return _Utils_eq(subKey, key) ? A2(_Browser_decodeEvent, decoder, event) : $elm$core$Maybe$Nothing;
 		};
-		var messages = A2($elm$core$List$filterMap, toMessage, state.bn);
+		var messages = A2($elm$core$List$filterMap, toMessage, state.bp);
 		return A2(
 			$elm$core$Task$andThen,
 			function (_v1) {
@@ -5989,6 +6006,7 @@ var $author$project$Main$subscriptions = function (model) {
 	var _v0 = model.f;
 	if (_v0.$ === 1) {
 		var startedModel = _v0.a;
+		var createAnimationFrameEvent = $elm$core$Basics$always($author$project$Main$AnimationFrame);
 		var _v1 = startedModel.C;
 		if (!_v1) {
 			return $elm$core$Platform$Sub$batch(
@@ -5999,7 +6017,7 @@ var $author$project$Main$subscriptions = function (model) {
 							$elm$json$Json$Decode$map,
 							$author$project$Main$HandleKeyboardEvent,
 							A2($elm$json$Json$Decode$field, 'key', $elm$json$Json$Decode$string))),
-						$elm$browser$Browser$Events$onAnimationFrameDelta($author$project$Main$AnimationFrame)
+						$elm$browser$Browser$Events$onAnimationFrameDelta(createAnimationFrameEvent)
 					]));
 		} else {
 			return $elm$core$Platform$Sub$batch(
@@ -6011,7 +6029,7 @@ var $author$project$Main$subscriptions = function (model) {
 							$elm$json$Json$Decode$map,
 							$author$project$Main$HandleKeyboardEvent,
 							A2($elm$json$Json$Decode$field, 'key', $elm$json$Json$Decode$string))),
-						$elm$browser$Browser$Events$onAnimationFrameDelta($author$project$Main$AnimationFrame)
+						$elm$browser$Browser$Events$onAnimationFrameDelta(createAnimationFrameEvent)
 					]));
 		}
 	} else {
@@ -6671,7 +6689,7 @@ var $author$project$Main$generatorToTask = function (generator) {
 };
 var $author$project$Main$Question = F4(
 	function (fraction1, mathOperation, fraction2, answer) {
-		return {Z: answer, ar: fraction1, as: fraction2, av: mathOperation};
+		return {Z: answer, as: fraction1, at: fraction2, aw: mathOperation};
 	});
 var $JoshuaHall$elm_fraction$Fraction$createUnsafe = F2(
 	function (numerator, denominator) {
@@ -7021,9 +7039,9 @@ var $author$project$Main$millisecondsPerQuestion = function (difficulty) {
 		case 0:
 			return $elm$core$Maybe$Nothing;
 		case 1:
-			return $elm$core$Maybe$Just(45000);
+			return $elm$core$Maybe$Just(55000);
 		case 2:
-			return $elm$core$Maybe$Just(35000);
+			return $elm$core$Maybe$Just(40000);
 		default:
 			return $elm$core$Maybe$Just(25000);
 	}
@@ -7236,11 +7254,11 @@ var $author$project$Main$update = F2(
 						if (_v0.b.$ === 1) {
 							var newTime = _v0.a.a;
 							var startedModel = _v0.b.a;
-							var timeDifference = $elm$time$Time$posixToMillis(newTime) - $elm$time$Time$posixToMillis(startedModel.aj);
 							var timeAllowedPerQuestion = $author$project$Main$millisecondsPerQuestion(startedModel.C);
 							var maybeTimeRemaining = A2(
 								$elm$core$Maybe$map,
 								function (x) {
+									var timeDifference = $elm$time$Time$posixToMillis(newTime) - $elm$time$Time$posixToMillis(startedModel.aj);
 									return x - timeDifference;
 								},
 								timeAllowedPerQuestion);
@@ -7309,6 +7327,7 @@ var $author$project$Main$update = F2(
 						}
 					case 11:
 						if (_v0.b.$ === 1) {
+							var _v9 = _v0.a;
 							var startedModel = _v0.b.a;
 							var newStartedModel = $author$project$Main$flushPendingToDraw(startedModel);
 							return _Utils_Tuple2(
@@ -7341,9 +7360,9 @@ var $author$project$Main$update = F2(
 							var point = _v0.a.a;
 							var startedModel = _v0.b.a;
 							var newStartedModel = function () {
-								var _v9 = startedModel.D;
-								if (!_v9.$) {
-									var pointer = _v9.a;
+								var _v10 = startedModel.D;
+								if (!_v10.$) {
+									var pointer = _v10.a;
 									return A3($author$project$Main$drawPoint, point, pointer, startedModel);
 								} else {
 									return startedModel;
@@ -7364,9 +7383,9 @@ var $author$project$Main$update = F2(
 							var point = _v0.a.a;
 							var startedModel = _v0.b.a;
 							var newStartedModel = function () {
-								var _v10 = startedModel.D;
-								if (!_v10.$) {
-									var pointer = _v10.a;
+								var _v11 = startedModel.D;
+								if (!_v11.$) {
+									var pointer = _v11.a;
 									return A3($author$project$Main$finalPoint, point, pointer, startedModel);
 								} else {
 									return startedModel;
@@ -7384,7 +7403,7 @@ var $author$project$Main$update = F2(
 						}
 					case 15:
 						if (_v0.b.$ === 1) {
-							var _v11 = _v0.a;
+							var _v12 = _v0.a;
 							return _Utils_Tuple2(
 								model,
 								$author$project$Ports$clearCanvas(0));
@@ -7450,8 +7469,8 @@ var $elm$virtual_dom$VirtualDom$lazy4 = _VirtualDom_lazy4;
 var $elm$html$Html$Lazy$lazy4 = $elm$virtual_dom$VirtualDom$lazy4;
 var $elm$html$Html$p = _VirtualDom_node('p');
 var $author$project$Main$posixPartsToString = function (parts) {
-	var centisecond = (parts.b6 / 100) | 0;
-	return $elm$core$String$fromInt(parts.ck) + ('.' + $elm$core$String$fromInt(centisecond));
+	var centisecond = (parts.b8 / 100) | 0;
+	return $elm$core$String$fromInt(parts.cm) + ('.' + $elm$core$String$fromInt(centisecond));
 };
 var $elm$time$Time$flooredDiv = F2(
 	function (numerator, denominator) {
@@ -7466,7 +7485,7 @@ var $elm$time$Time$toAdjustedMinutesHelp = F3(
 			} else {
 				var era = eras.a;
 				var olderEras = eras.b;
-				if (_Utils_cmp(era.aE, posixMinutes) < 0) {
+				if (_Utils_cmp(era.aF, posixMinutes) < 0) {
 					return posixMinutes + era.b;
 				} else {
 					var $temp$defaultOffset = defaultOffset,
@@ -7503,15 +7522,15 @@ var $elm$time$Time$toCivil = function (minutes) {
 	var month = mp + ((mp < 10) ? 3 : (-9));
 	var year = yearOfEra + (era * 400);
 	return {
-		aN: (dayOfYear - ((((153 * mp) + 2) / 5) | 0)) + 1,
-		a0: month,
-		by: year + ((month <= 2) ? 1 : 0)
+		aP: (dayOfYear - ((((153 * mp) + 2) / 5) | 0)) + 1,
+		a2: month,
+		bA: year + ((month <= 2) ? 1 : 0)
 	};
 };
 var $elm$time$Time$toDay = F2(
 	function (zone, time) {
 		return $elm$time$Time$toCivil(
-			A2($elm$time$Time$toAdjustedMinutes, zone, time)).aN;
+			A2($elm$time$Time$toAdjustedMinutes, zone, time)).aP;
 	});
 var $elm$time$Time$toHour = F2(
 	function (zone, time) {
@@ -7552,7 +7571,7 @@ var $elm$time$Time$Sep = 8;
 var $elm$time$Time$toMonth = F2(
 	function (zone, time) {
 		var _v0 = $elm$time$Time$toCivil(
-			A2($elm$time$Time$toAdjustedMinutes, zone, time)).a0;
+			A2($elm$time$Time$toAdjustedMinutes, zone, time)).a2;
 		switch (_v0) {
 			case 1:
 				return 0;
@@ -7593,18 +7612,18 @@ var $elm$time$Time$toSecond = F2(
 var $elm$time$Time$toYear = F2(
 	function (zone, time) {
 		return $elm$time$Time$toCivil(
-			A2($elm$time$Time$toAdjustedMinutes, zone, time)).by;
+			A2($elm$time$Time$toAdjustedMinutes, zone, time)).bA;
 	});
 var $justinmimbs$time_extra$Time$Extra$posixToParts = F2(
 	function (zone, posix) {
 		return {
-			aN: A2($elm$time$Time$toDay, zone, posix),
-			au: A2($elm$time$Time$toHour, zone, posix),
-			b6: A2($elm$time$Time$toMillis, zone, posix),
-			ay: A2($elm$time$Time$toMinute, zone, posix),
-			a0: A2($elm$time$Time$toMonth, zone, posix),
-			ck: A2($elm$time$Time$toSecond, zone, posix),
-			by: A2($elm$time$Time$toYear, zone, posix)
+			aP: A2($elm$time$Time$toDay, zone, posix),
+			av: A2($elm$time$Time$toHour, zone, posix),
+			b8: A2($elm$time$Time$toMillis, zone, posix),
+			az: A2($elm$time$Time$toMinute, zone, posix),
+			a2: A2($elm$time$Time$toMonth, zone, posix),
+			cm: A2($elm$time$Time$toSecond, zone, posix),
+			bA: A2($elm$time$Time$toYear, zone, posix)
 		};
 	});
 var $author$project$Main$UpdateDenominatorAnswer = function (a) {
@@ -7757,7 +7776,7 @@ var $author$project$Main$questionView = F4(
 										]),
 									_List_fromArray(
 										[
-											$author$project$Main$fractionView(question.ar),
+											$author$project$Main$fractionView(question.as),
 											A2(
 											$elm$html$Html$div,
 											_List_fromArray(
@@ -7775,10 +7794,10 @@ var $author$project$Main$questionView = F4(
 													_List_fromArray(
 														[
 															$elm$html$Html$text(
-															$author$project$Main$mathOperationToString(question.av))
+															$author$project$Main$mathOperationToString(question.aw))
 														]))
 												])),
-											$author$project$Main$fractionView(question.as)
+											$author$project$Main$fractionView(question.at)
 										]))
 								]))
 						])),
@@ -8070,10 +8089,10 @@ var $author$project$Main$questionHistoryIndividualView = F2(
 				return 'Time limit reached';
 			}
 		}();
-		var mathOperation = $author$project$Main$mathOperationToString(history.i.av);
+		var mathOperation = $author$project$Main$mathOperationToString(history.i.aw);
 		var indexString = $elm$core$String$fromInt(number);
-		var fraction2 = $author$project$Main$fractionToSimpleString(history.i.as);
-		var fraction1 = $author$project$Main$fractionToSimpleString(history.i.ar);
+		var fraction2 = $author$project$Main$fractionToSimpleString(history.i.at);
+		var fraction1 = $author$project$Main$fractionToSimpleString(history.i.as);
 		var correct = function () {
 			var _v0 = history.P;
 			if (!_v0.$) {
@@ -8139,31 +8158,33 @@ var $author$project$Main$questionHistoryIndividualView = F2(
 							]))
 					])));
 	});
-var $author$project$Main$reverseRangeHelp = F3(
-	function (list, hi, lo) {
-		reverseRangeHelp:
-		while (true) {
-			if (_Utils_cmp(hi, lo) > -1) {
-				var $temp$list = A2($elm$core$List$cons, lo, list),
-					$temp$hi = hi,
-					$temp$lo = $author$project$Main$increment(lo);
-				list = $temp$list;
-				hi = $temp$hi;
-				lo = $temp$lo;
-				continue reverseRangeHelp;
-			} else {
-				return list;
+var $elm_community$list_extra$List$Extra$reverseRange = function () {
+	var helper = F3(
+		function (list, high, low) {
+			helper:
+			while (true) {
+				if (_Utils_cmp(high, low) > -1) {
+					var $temp$list = A2($elm$core$List$cons, low, list),
+						$temp$high = high,
+						$temp$low = low + 1;
+					list = $temp$list;
+					high = $temp$high;
+					low = $temp$low;
+					continue helper;
+				} else {
+					return list;
+				}
 			}
-		}
-	});
-var $author$project$Main$reverseRange = $author$project$Main$reverseRangeHelp(_List_Nil);
+		});
+	return helper(_List_Nil);
+}();
 var $author$project$Main$reversedIndexesIndexedMapPlusOne = F2(
 	function (f, xs) {
 		return A3(
 			$elm$core$List$map2,
 			f,
 			A2(
-				$author$project$Main$reverseRange,
+				$elm_community$list_extra$List$Extra$reverseRange,
 				$elm$core$List$length(xs),
 				1),
 			xs);
@@ -8195,7 +8216,7 @@ var $elm$core$Basics$composeR = F3(
 		return g(
 			f(x));
 	});
-var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions = {ch: true, co: false};
+var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions = {cj: true, cq: false};
 var $elm$virtual_dom$VirtualDom$Custom = function (a) {
 	return {$: 3, a: a};
 };
@@ -8208,7 +8229,7 @@ var $elm$html$Html$Events$custom = F2(
 	});
 var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$Event = F6(
 	function (keys, button, clientPos, offsetPos, pagePos, screenPos) {
-		return {bC: button, bF: clientPos, b0: keys, U: offsetPos, cc: pagePos, cj: screenPos};
+		return {bE: button, bH: clientPos, b2: keys, U: offsetPos, ce: pagePos, cl: screenPos};
 	});
 var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$BackButton = 4;
 var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$ErrorButton = 0;
@@ -8248,7 +8269,7 @@ var $mpizenberg$elm_pointer_events$Internal$Decode$clientPos = A3(
 	A2($elm$json$Json$Decode$field, 'clientY', $elm$json$Json$Decode$float));
 var $mpizenberg$elm_pointer_events$Internal$Decode$Keys = F3(
 	function (alt, ctrl, shift) {
-		return {bz: alt, bJ: ctrl, cl: shift};
+		return {bB: alt, bL: ctrl, cn: shift};
 	});
 var $elm$json$Json$Decode$bool = _Json_decodeBool;
 var $elm$json$Json$Decode$map3 = _Json_map3;
@@ -8293,9 +8314,9 @@ var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onWithOptions = F3(
 				$elm$json$Json$Decode$map,
 				function (ev) {
 					return {
-						b5: tag(ev),
-						ch: options.ch,
-						co: options.co
+						b7: tag(ev),
+						cj: options.cj,
+						cq: options.cq
 					};
 				},
 				$mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$eventDecoder));
@@ -8306,12 +8327,12 @@ var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onLeave = A2($mpizenb
 var $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onMove = A2($mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onWithOptions, 'mousemove', $mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$defaultOptions);
 var $mpizenberg$elm_pointer_events$Html$Events$Extra$Touch$Event = F4(
 	function (keys, changedTouches, targetTouches, touches) {
-		return {bE: changedTouches, b0: keys, cq: targetTouches, cu: touches};
+		return {bG: changedTouches, b2: keys, cs: targetTouches, cw: touches};
 	});
 var $elm$json$Json$Decode$map4 = _Json_map4;
 var $mpizenberg$elm_pointer_events$Html$Events$Extra$Touch$Touch = F4(
 	function (identifier, clientPos, pagePos, screenPos) {
-		return {bF: clientPos, bX: identifier, cc: pagePos, cj: screenPos};
+		return {bH: clientPos, bZ: identifier, ce: pagePos, cl: screenPos};
 	});
 var $mpizenberg$elm_pointer_events$Html$Events$Extra$Touch$touchDecoder = A5(
 	$elm$json$Json$Decode$map4,
@@ -8376,7 +8397,7 @@ var $author$project$Main$eventDecoder = A3(
 	$elm$json$Json$Decode$map2,
 	F2(
 		function (event, offset) {
-			return {aP: event, bp: offset};
+			return {aR: event, br: offset};
 		}),
 	$mpizenberg$elm_pointer_events$Html$Events$Extra$Touch$eventDecoder,
 	$author$project$Main$offsetDecoder);
@@ -8389,9 +8410,9 @@ var $author$project$Main$onTouch = F2(
 				$elm$json$Json$Decode$map,
 				function (ev) {
 					return {
-						b5: tag(ev),
-						ch: true,
-						co: true
+						b7: tag(ev),
+						cj: true,
+						cq: true
 					};
 				},
 				$author$project$Main$eventDecoder));
@@ -8415,7 +8436,7 @@ var $elm$virtual_dom$VirtualDom$property = F2(
 		return A2(
 			_VirtualDom_property,
 			_VirtualDom_noInnerHtmlOrFormAction(key),
-			_VirtualDom_noJavaScriptOrHtmlUri(value));
+			_VirtualDom_noJavaScriptOrHtmlJson(value));
 	});
 var $elm$html$Html$Attributes$property = $elm$virtual_dom$VirtualDom$property;
 var $joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$commands = function (list) {
@@ -8858,7 +8879,7 @@ var $joakin$elm_canvas$Canvas$renderTextFill = F5(
 	function (txt, x, y, maybeColor, cmds) {
 		return A2(
 			$elm$core$List$cons,
-			A4($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$fillText, txt.aF, x, y, txt.aw),
+			A4($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$fillText, txt.aG, x, y, txt.ax),
 			function () {
 				if (!maybeColor.$) {
 					var color = maybeColor.a;
@@ -8901,7 +8922,7 @@ var $joakin$elm_canvas$Canvas$renderTextStroke = F5(
 	function (txt, x, y, maybeColor, cmds) {
 		return A2(
 			$elm$core$List$cons,
-			A4($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$strokeText, txt.aF, x, y, txt.aw),
+			A4($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$strokeText, txt.aG, x, y, txt.ax),
 			function () {
 				if (!maybeColor.$) {
 					var color = maybeColor.a;
@@ -8916,7 +8937,7 @@ var $joakin$elm_canvas$Canvas$renderTextStroke = F5(
 	});
 var $joakin$elm_canvas$Canvas$renderTextDrawOp = F3(
 	function (drawOp, txt, cmds) {
-		var _v0 = txt.a8;
+		var _v0 = txt.ba;
 		var x = _v0.a;
 		var y = _v0.b;
 		switch (drawOp.$) {
@@ -8993,11 +9014,11 @@ var $joakin$elm_canvas$Canvas$Internal$Texture$drawTexture = F4(
 			function () {
 				if (!t.$) {
 					var image = t.a;
-					return A9($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$drawImage, 0, 0, image.bv, image.aT, x, y, image.bv, image.aT, image.aa);
+					return A9($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$drawImage, 0, 0, image.bx, image.aV, x, y, image.bx, image.aV, image.aa);
 				} else {
 					var sprite = t.a;
 					var image = t.b;
-					return A9($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$drawImage, sprite.bw, sprite.bx, sprite.bv, sprite.aT, x, y, sprite.bv, sprite.aT, image.aa);
+					return A9($joakin$elm_canvas$Canvas$Internal$CustomElementJsonApi$drawImage, sprite.by, sprite.bz, sprite.bx, sprite.aV, x, y, sprite.bx, sprite.aV, image.aa);
 				}
 			}(),
 			cmds);
@@ -9120,7 +9141,7 @@ var $joakin$elm_canvas$Canvas$Internal$Texture$decodeTextureImage = A2(
 				function (tagName, width, height) {
 					return (tagName === 'IMG') ? $elm$core$Maybe$Just(
 						$joakin$elm_canvas$Canvas$Internal$Texture$TImage(
-							{aT: height, aa: image, bv: width})) : $elm$core$Maybe$Nothing;
+							{aV: height, aa: image, bx: width})) : $elm$core$Maybe$Nothing;
 				}),
 			A2($elm$json$Json$Decode$field, 'tagName', $elm$json$Json$Decode$string),
 			A2($elm$json$Json$Decode$field, 'width', $elm$json$Json$Decode$float),
@@ -9176,15 +9197,15 @@ var $joakin$elm_canvas$Canvas$toHtmlWith = F3(
 					$joakin$elm_canvas$Canvas$render(entities)),
 				A2(
 					$elm$core$List$cons,
-					$elm$html$Html$Attributes$height(options.aT),
+					$elm$html$Html$Attributes$height(options.aV),
 					A2(
 						$elm$core$List$cons,
-						$elm$html$Html$Attributes$width(options.bv),
+						$elm$html$Html$Attributes$width(options.bx),
 						attrs))),
 			A2(
 				$elm$core$List$cons,
 				_Utils_Tuple2('__canvas', $joakin$elm_canvas$Canvas$cnvs),
-				A2($elm$core$List$map, $joakin$elm_canvas$Canvas$renderTextureSource, options.bq)));
+				A2($elm$core$List$map, $joakin$elm_canvas$Canvas$renderTextureSource, options.bs)));
 	});
 var $joakin$elm_canvas$Canvas$toHtml = F3(
 	function (_v0, attrs, entities) {
@@ -9192,7 +9213,7 @@ var $joakin$elm_canvas$Canvas$toHtml = F3(
 		var h = _v0.b;
 		return A3(
 			$joakin$elm_canvas$Canvas$toHtmlWith,
-			{aT: h, bq: _List_Nil, bv: w},
+			{aV: h, bs: _List_Nil, bx: w},
 			attrs,
 			entities);
 	});
@@ -9215,8 +9236,8 @@ var $elm$core$Maybe$withDefault = F2(
 		}
 	});
 var $author$project$Main$touchCoordinates = function (_v0) {
-	var event = _v0.aP;
-	var targetOffset = _v0.bp;
+	var event = _v0.aR;
+	var targetOffset = _v0.br;
 	return A2(
 		$elm$core$Maybe$withDefault,
 		_Utils_Tuple2(0, 0),
@@ -9226,12 +9247,12 @@ var $author$project$Main$touchCoordinates = function (_v0) {
 				var _v1 = targetOffset;
 				var x2 = _v1.a;
 				var y2 = _v1.b;
-				var _v2 = touch.cc;
+				var _v2 = touch.ce;
 				var x = _v2.a;
 				var y = _v2.b;
 				return _Utils_Tuple2(x - x2, y - y2);
 			},
-			$elm$core$List$head(event.bE)));
+			$elm$core$List$head(event.bG)));
 };
 var $author$project$Main$scratchpadView = function (model) {
 	return A2(
@@ -9266,6 +9287,7 @@ var $author$project$Main$scratchpadView = function (model) {
 						_List_fromArray(
 							[
 								A2($elm$html$Html$Attributes$style, 'touch-action', 'none'),
+								$elm$html$Html$Attributes$class('quickfracCanvas'),
 								$mpizenberg$elm_pointer_events$Html$Events$Extra$Mouse$onDown(
 								A2(
 									$elm$core$Basics$composeR,
@@ -9332,31 +9354,6 @@ var $author$project$Main$scratchpadView = function (model) {
 var $author$project$Main$StartGame = function (a) {
 	return {$: 0, a: a};
 };
-var $elm$core$List$filter = F2(
-	function (isGood, list) {
-		return A3(
-			$elm$core$List$foldr,
-			F2(
-				function (x, xs) {
-					return isGood(x) ? A2($elm$core$List$cons, x, xs) : xs;
-				}),
-			_List_Nil,
-			list);
-	});
-var $elm$core$Tuple$second = function (_v0) {
-	var y = _v0.b;
-	return y;
-};
-var $elm$html$Html$Attributes$classList = function (classes) {
-	return $elm$html$Html$Attributes$class(
-		A2(
-			$elm$core$String$join,
-			' ',
-			A2(
-				$elm$core$List$map,
-				$elm$core$Tuple$first,
-				A2($elm$core$List$filter, $elm$core$Tuple$second, classes))));
-};
 var $author$project$Main$difficultyToButtonColor = function (difficulty) {
 	switch (difficulty) {
 		case 0:
@@ -9382,15 +9379,8 @@ var $author$project$Main$setDifficultyButton = function (difficulty) {
 				$elm$html$Html$button,
 				_List_fromArray(
 					[
-						$elm$html$Html$Attributes$classList(
-						_List_fromArray(
-							[
-								_Utils_Tuple2('button', true),
-								_Utils_Tuple2('difficultyButton', true),
-								_Utils_Tuple2(
-								$author$project$Main$difficultyToButtonColor(difficulty),
-								true)
-							])),
+						$elm$html$Html$Attributes$class(
+						'button difficultyButton ' + $author$project$Main$difficultyToButtonColor(difficulty)),
 						$elm$html$Html$Events$onClick(
 						$author$project$Main$StartGame(difficulty))
 					]),
@@ -9469,6 +9459,6 @@ var $author$project$Main$view = function (model) {
 		}());
 };
 var $author$project$Main$main = $elm$browser$Browser$element(
-	{bZ: $author$project$Main$initWithFlags, cp: $author$project$Main$subscriptions, cv: $author$project$Main$update, cw: $author$project$Main$view});
+	{b$: $author$project$Main$initWithFlags, cr: $author$project$Main$subscriptions, cx: $author$project$Main$update, cy: $author$project$Main$view});
 _Platform_export({'Main':{'init':$author$project$Main$main(
 	$elm$json$Json$Decode$succeed(0))(0)}});}(this));

@@ -3,3 +3,4 @@ repl-temp-*
 .vscode/
 node_modules/
 .pnpm-debug.log
+.DS_Store

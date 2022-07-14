@@ -7,10 +7,11 @@
     "name": "Joshua Hall"
   },
   "dependencies": {
-    "bulma": "0.9.3",
+    "bulma": "0.9.4",
     "elm-canvas": "2.2.4"
   },
   "devDependencies": {
-    "google-closure-compiler": "20220301.0.0"
+    "elm-review": "^2.7.3",
+    "google-closure-compiler": "20220601.0.0"
   }
 }
