@@ -17,7 +17,7 @@
             "elm-community/list-extra": "8.6.0",
             "joakin/elm-canvas": "5.0.0",
             "justinmimbs/time-extra": "1.1.1",
-            "mpizenberg/elm-pointer-events": "4.0.2"
+            "mpizenberg/elm-pointer-events": "5.0.0"
         },
         "indirect": {
             "elm/bytes": "1.0.8",
